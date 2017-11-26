@@ -17,10 +17,13 @@ library
   hs-source-dirs:      src
   exposed-modules:     Lib
   build-depends:       base >= 4.7 && < 5
+                      , base16-bytestring
                       , binary
                       , binary-bits
+                      , bytestring
                       , cpu
                       , flat
+                      , ghc-prim
   default-language:    Haskell2010
 
 executable the-exe
