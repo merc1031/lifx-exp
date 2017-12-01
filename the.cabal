@@ -23,6 +23,7 @@ library
                       , bytestring
                       , cpu
                       , flat
+                      , hashable
                       , ghc-prim
                       , network
                       , network-info
@@ -33,6 +34,7 @@ library
                       , monad-control
                       , transformers
                       , mtl
+                      , text
                       , unordered-containers
   default-language:    Haskell2010
 

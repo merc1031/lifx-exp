@@ -4,6 +4,7 @@
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE MagicHash #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
@@ -50,6 +51,7 @@ import            Data.Bits                     ( zeroBits
 import            Data.Bool                     ( bool )
 import            Data.Char                     ( intToDigit )
 import            Data.Functor.Identity         ( Identity )
+import            Data.Hashable                 ( Hashable )
 import            Data.Int                      ( Int8
                                                 , Int16
                                                 , Int32
@@ -76,6 +78,7 @@ import            Network.Socket                ( Socket (..)
                                                 , socket
                                                 , Family(AF_INET)
                                                 , SocketType(Datagram)
+                                                , PortNumber
                                                 )
 import            Network.Socket.ByteString
 import            Numeric
@@ -86,6 +89,7 @@ import qualified  Data.Binary.Put               as BinP
 import qualified  Data.ByteString.Base16.Lazy   as BSL16
 import qualified  Data.ByteString.Lazy          as BSL
 import qualified  Data.HashMap.Strict           as HM
+import qualified  Data.Text.Lazy                as TL
 import qualified  Network.Info                  as NI
 
 
@@ -199,6 +203,23 @@ data HSBK
   , hsbkKelvin :: Word16 --2500-9000
   } deriving Show
 
+data Get
+  = Get
+
+data State
+  = State
+  { sColor :: HSBK
+  , sReserved :: Int16
+  , sPower :: Word16
+  , sLabel :: TL.Text
+  , sReserved2 :: Word64
+  } deriving Show
+
+-- | 32 bytes
+newtype Label
+  = Label { unLabel :: TL.Text }
+  deriving Show
+
 data MessageType
   = DeviceMessageType DeviceMessage
   | LightMessageType LightMessage
@@ -211,7 +232,9 @@ data DeviceMessage
   deriving Show
 
 data LightMessage
-  = SetColorMessage
+  = GetMessage
+  | SetColorMessage
+  | StateMessage
   deriving Show
 
 data MultiZoneMessage
@@ -227,7 +250,9 @@ messageTypeToWord16
   deviceMessageTypeToWord16 = \case
     GetServiceMessage -> 2
   lightMessageTypeToWord16 = \case
+    GetMessage -> 101
     SetColorMessage -> 102
+    StateMessage -> 107
   multiZoneMessageTypeToWord16 = \case
     SetColorZonesMessage -> 501
 
@@ -302,7 +327,7 @@ newtype UniqueSource
   deriving (Show, Eq)
 
 newtype Target
-  = Target { unTarget :: Word64 }
+  = Target { unTarget :: Mac {-Word64-} }
   deriving Show
 
 newtype Sequence
@@ -338,8 +363,41 @@ instance WithSize StateService where
   size _ = 5
 
 instance Binary Target where
-  put (Target t) = BinP.putWord64le t
-  get = Target <$> BinG.getWord64le
+  put t = BinP.putWord64le $ targetToWord64 t
+  get = word64ToTarget <$> BinG.getWord64le
+
+
+targetToWord64
+  :: Target
+  -> Word64
+targetToWord64 (Target (Mac t)) =
+  let
+    (b1, b2, b3, b4, b5, b6) = t
+
+    r8 = fromIntegral b6 `shiftL` 2
+    r7 = fromIntegral b5 `shiftL` 3
+    r6 = fromIntegral b4 `shiftL` 4
+    r5 = fromIntegral b3 `shiftL` 5
+    r4 = fromIntegral b2 `shiftL` 6
+    r3 = fromIntegral b1 `shiftL` 7
+  in
+    r8 + r7 + r6 + r5 + r4 + r3
+
+word64ToTarget
+  :: Word64
+  -> Target
+word64ToTarget n =
+  let
+    (b1, _) = extract' r1 1 2
+    (b2, r1) = extract' r2 1 2
+    (b3, r2) = extract' r3 1 2
+    (b4, r3) = extract' r4 1 2
+    (b5, r4) = extract' r5 1 2
+    (b6, r5) = extract' dropped 1 2
+  in
+    Target $ Mac (b1, b2, b3, b4, b5, b6)
+  where
+    dropped = n `shiftR` 2
 
 instance Binary UniqueSource where
   put (UniqueSource t) = BinP.putWord32le t
@@ -368,13 +426,16 @@ instance Binary Frame where
     fSource <- UniqueSource <$> BinG.getWord32le
     pure Frame {..}
 
---Now your algorithm for cutting out from M to N becomes a two-step process: you shift the original value M bits to the right, and then perform a bit-wise AND with the mask of N-M ones.
+-- | Cutting out from M to N becomes a two-step process: you shift the original value M bits to the right, and then perform a bit-wise AND with the mask of N-M ones.
 extract :: (Integral a, Bits a, Integral b) => a -> Int -> Int -> b
-extract x m n = fromIntegral field
-  where field = (x `shiftR` m) .&. mask
+extract x m n = fst $ extract' x m n
+
+extract' :: (Integral a, Bits a, Integral b) => a -> Int -> Int -> (b, a)
+extract' x m n = (fromIntegral field, shifted)
+  where field = shifted .&. mask
+        shifted = x `shiftR` m
         mask = bit w - 1
         w = n - m
-
 
 
 putFrame2ndByte Frame {..} =
@@ -487,39 +548,82 @@ broadcast sock bcast a = do
 
   let
     enc = Bin.encode a
-  print $ BSL16.encode enc
   sendManyTo sock (BSL.toChunks enc) bcast
 -- BinP.runPut $ BinP.putInt16le ((1 `shiftL` 13) + (1 `shiftL` 12) + (1024))
 
 data Callback
-  = forall a e m. (MonadError e m, Binary a, WithSize a) => Callback { runDecode :: BSL.ByteString -> m a, runCallback :: a -> SockAddr -> IO () }
+  = forall a. (Binary a, WithSize a) => Callback { runDecode :: Header -> BSL.ByteString -> Except PayloadDecodeError (Packet a), runCallback :: SharedState -> Packet a -> SockAddr -> IO () }
 
 data AppState
   = AppState
-  { asReplyCallbacks :: TArray Word8 Callback
-  , asReceiveThread :: Async ()
+  { asReceiveThread :: Async ()
   , asDiscoveryThread :: Async ()
-  , asLights :: [Light]
-  , asSocket :: Socket
   }
 
 data SharedState
   = SharedState
   { ssReplyCallbacks :: TArray Word8 Callback
-  , ssLights :: [Light]
+  , ssDevices :: TVar (HM.HashMap DeviceId Device)
   , ssSocket :: Socket
   , ssNextSeq :: IO Sequence
   }
 
-data Light
-  = Light
-  { lService :: Word8
-  , lPort :: Word32
+newtype Mac
+  = Mac (Word8, Word8, Word8, Word8, Word8, Word8)
+  deriving (Show, Eq, Hashable)
+
+newtype DeviceId
+  = DeviceId Mac
+  deriving (Show, Eq, Hashable)
+
+newtype DeviceAddress
+  = DeviceAddress Word32
+  deriving (Show, Eq)
+
+data DeviceSocketAddress
+  = DeviceSocketAddress PortNumber DeviceAddress
+  deriving (Show, Eq)
+
+data Device
+  = Device
+  { dAddr :: DeviceSocketAddress
+  , dDeviceId :: DeviceId
+  } deriving (Show, Eq)
+
+data HeaderDecodeError
+  = NotAHeader
+  { hdeError :: String
+  , hdeOrig :: BSL.ByteString
+  , hdeRemaining :: BSL.ByteString
+  , hdeOffset :: BinG.ByteOffset
   }
+  | ImproperSourceInHeader
+  { hdeHeader :: Header
+  , hdeOrig :: BSL.ByteString
+  , hdeRemaining :: BSL.ByteString
+  , hdeOffset :: BinG.ByteOffset
+  }
+  | ImproperSizeInHeader
+  { hdeHeader :: Header
+  , hdeOrig :: BSL.ByteString
+  , hdeRemaining :: BSL.ByteString
+  , hdeOffset :: BinG.ByteOffset
+  }
+  deriving Show
 
-data Error = Error
+data PayloadDecodeError
+  = PayloadDecodeFailed
+  { pdeHeader :: Header
+  , pdeRemaining :: BSL.ByteString
+  , pdeRemainingAfterFail :: BSL.ByteString
+  , pdeOffsetAfterFail :: BinG.ByteOffset
+  , pdeError :: String
+  }
+  deriving Show
 
---decodePacketThen :: (MonadError Error m, Binary a) => BSL.ByteString -> (a -> m ()) -> m ()
+
+
+--decodePacketThen :: _
 --decodePacketThen bs cont =
 --  case Bin.decodeOrFail bs of
 --    Left _ -> throwError Error
@@ -534,37 +638,70 @@ data Error = Error
 --        Right (_, _, payload) -> cont payload
 
 --decodePacket :: forall m a. (MonadError Error m, Binary a, WithSize a) => BSL.ByteString -> m a
-decodePacket :: (Binary a, WithSize a) => BSL.ByteString -> Except Error a
-decodePacket bs =
+
+decodeHeader :: BSL.ByteString -> Except HeaderDecodeError (Header, BSL.ByteString)
+decodeHeader bs =
   case Bin.decodeOrFail bs of
-    Left _ -> throwE Error
+    Left (str, offset, err) -> throwE $ NotAHeader err bs str offset
     Right (rem, cons, hdr) -> do
       let
         packetSize = fSize $ hFrame hdr
         packetSource = fSource $ hFrame hdr
-      when (packetSize /= fromIntegral (BSL.length bs)) $ throwError Error
-      when (packetSource /= uniqueSource) $ throwError Error
-      case Bin.decodeOrFail rem of
-        Left _ -> throwE Error
-        Right (_, _, payload) -> pure payload
+      when (packetSize /= fromIntegral (BSL.length bs)) $ throwError $ ImproperSizeInHeader hdr bs rem cons
+      when (packetSource /= uniqueSource) $ throwError $ ImproperSourceInHeader hdr bs rem cons
+      pure (hdr, rem)
+
+decodePacket :: (Binary a, WithSize a) => Header -> BSL.ByteString -> Except PayloadDecodeError (Packet a)
+decodePacket hdr rem =
+  case Bin.decodeOrFail rem of
+    Left (str, offset, err) -> throwE $ PayloadDecodeFailed hdr rem str offset err
+    Right (_, _, payload) -> pure $ packetFromHeader hdr payload
 
 uniqueSource = UniqueSource 1234
 
 receiveThread
   :: SharedState
   -> IO (Async ())
-receiveThread SharedState {..} = async $ forever $ do
+receiveThread ss@SharedState {..} = async $ forever $ do
   threadDelay $ 1 * 100000
   (bs, sa) <- recvFrom ssSocket 1500
-  print $ "Received 16" <> show (BSL16.encode $ BSL.fromStrict bs)
-  runExceptT $ decodePacketThen (BSL.fromStrict bs) $ \StateService {..} -> do
-    lift $ print $ show ssService
-    lift $ print $ show ssPort
+  let
+    headerE = runExcept $ decodeHeader (BSL.fromStrict bs)
+
+  forM_ headerE $ \(header, rest) -> async $ do
+    let
+      Sequence seq = faSequence $ hFrameAddress header
+    cb <- atomically $ readArray ssReplyCallbacks seq
+    case cb of
+      Callback {..} -> do
+        let
+          payloadE = runExcept $ runDecode header rest
+        case payloadE of
+          Right payload ->
+            runCallback ss payload sa
+          Left e ->
+            print $ show e
+
   pure ()
 
-onStateService StateService {..} sa = do
-    print $ show ssService
-    print $ show ssPort
+onStateService SharedState {..} Packet {..} sa = do
+  let
+    incomingDevice = Device (socketAddrToDeviceSocketAddr sa) (DeviceId $ unTarget $ faTarget pFrameAddress)
+  atomically $ do
+    devs <- readTVar ssDevices
+    case dDeviceId incomingDevice `HM.lookup` devs of
+      Just l -> todo
+      Nothing ->  todo
+  where
+    StateService {..} = pPayload
+    todo = pure ()
+
+data FoundDevice
+  = FoundDevice
+  {
+  }
+
+socketAddrToDeviceSocketAddr (SockAddrInet pa ha) = DeviceSocketAddress pa (DeviceAddress ha)
 
 discoveryThread
   :: SharedState
@@ -580,7 +717,7 @@ discoveryThread ss@SharedState {..} bcast = async $ forever $ do
     $ mkPacket
         AllTagged
         uniqueSource
-        (Target 0)
+        (word64ToTarget 0)
         NoAckRequired
         ResRequired
         nextSeq
@@ -608,30 +745,26 @@ mkState = do
     pure val
 
   ifaces <- (HM.fromList . fmap (NI.name &&& id)) <$> NI.getNetworkInterfaces
-  print $ "IFaces " <> show ifaces
   let net@(NI.IPv4 hostAddr) = case HM.lookup "eth0" ifaces of
         Just iface -> NI.ipv4 iface
         Nothing -> undefined
 
-  print $ "Net Address " <> show net
-  print $ "Host Address " <> show hostAddr
   ssSocket <- socket AF_INET Datagram defaultProtocol
   let bcast = SockAddrInet (fromIntegral port) (tupleToHostAddress (255,255,255,255)) --0xffffffff -- 255.255.255.255
       port = 56700
       addr = SockAddrInet (port + 1) 0
 
-  print $ "Sock Addr " <> show addr
   when (isSupportedSocketOption Broadcast) (setSocketOption ssSocket Broadcast 1)
   bind ssSocket addr
   ssReplyCallbacks <- atomically $ newArray_ (0, 255) --newListArray (0, 255) (map (const $ Callback decodePacket $ const $ const $ pure ()) [0..255])
+  ssDevices <- newTVarIO mempty
 
   let
-    ssLights = []
     sharedState = SharedState {..}
   asReceiveThread <- receiveThread sharedState
   asDiscoveryThread <- discoveryThread sharedState bcast
 
-  pure $ AppState ssReplyCallbacks asReceiveThread asDiscoveryThread ssLights ssSocket
+  pure $ AppState asReceiveThread asDiscoveryThread
 
 
 instance Binary a => Binary (Packet a) where
@@ -643,6 +776,7 @@ instance Binary a => Binary (Packet a) where
 
   get = pure $ Packet undefined undefined undefined undefined
 
+packetFromHeader Header {..} payload = Packet hFrame hFrameAddress hProtocolHeader payload
 
 -- Example
 --
