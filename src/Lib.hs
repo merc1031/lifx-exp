@@ -15,7 +15,6 @@
 {-# LANGUAGE UndecidableInstances #-}
 module Lib where
 
-
 import            Control.Arrow
 import            Control.Concurrent
 import            Control.Concurrent.Async
@@ -114,34 +113,51 @@ data ResRequired
   deriving Show
 
 
-data Reserved (d :: Symbol) a = Reserved
+data Reserved (d :: Symbol) a
+  = Reserved
 
 data Sized (n :: Nat) a
 
 
-taggedToBool SingleTagged = False
-taggedToBool AllTagged = True
+taggedToBool SingleTagged
+  = False
+taggedToBool AllTagged
+  = True
 
-addressableToBool NoFrameAddress = False
-addressableToBool HasFrameAddress = True
+addressableToBool NoFrameAddress
+  = False
+addressableToBool HasFrameAddress
+  = True
 
-ackRequiredToBool NoAckRequired = False
-ackRequiredToBool AckRequired = True
+ackRequiredToBool NoAckRequired
+  = False
+ackRequiredToBool AckRequired
+  = True
 
-resRequiredToBool NoResRequired = False
-resRequiredToBool ResRequired = True
+resRequiredToBool NoResRequired
+  = False
+resRequiredToBool ResRequired
+  = True
 
-boolToTagged False = SingleTagged
-boolToTagged True = AllTagged
+boolToTagged False
+  = SingleTagged
+boolToTagged True
+  = AllTagged
 
-boolToAddressable False = NoFrameAddress
-boolToAddressable True = HasFrameAddress
+boolToAddressable False
+  = NoFrameAddress
+boolToAddressable True
+  = HasFrameAddress
 
-boolToAckRequired False = NoAckRequired
-boolToAckRequired True = AckRequired
+boolToAckRequired False
+  = NoAckRequired
+boolToAckRequired True
+  = AckRequired
 
-boolToResRequired False = NoResRequired
-boolToResRequired True = ResRequired
+boolToResRequired False
+  = NoResRequired
+boolToResRequired True
+  = ResRequired
 
 -- Little endian
 --
@@ -156,7 +172,8 @@ data Frame
   , fAddressable :: Addressable -- 1
   , fProtocol :: Word16 -- 1024
   , fSource :: UniqueSource
-  } deriving Show
+  }
+  deriving Show
 
 -- Layout in bits:   64|48|6|1|1|8
 --                   ui|ui|r|b|b|ui
@@ -169,7 +186,8 @@ data FrameAddress
   , faAckRequired :: AckRequired
   , faResRequired :: ResRequired
   , faSequence :: Sequence
-  } deriving Show
+  }
+  deriving Show
 
 
 newtype UnusedMac
@@ -183,7 +201,8 @@ data ProtocolHeader
   { phReserved :: Word64
   , phType :: MessageType
   , phReserved2 :: ()
-  } deriving Show
+  }
+  deriving Show
 
 data Packet a
   = Packet
@@ -191,7 +210,8 @@ data Packet a
   , pFrameAddress :: FrameAddress
   , pProtocolHeader :: ProtocolHeader
   , pPayload :: a
-  } deriving Show
+  }
+  deriving Show
 
 -- Layout in bits:   16|16|16|16
 --                   ui|ui|ui|ui
@@ -201,7 +221,8 @@ data HSBK
   , hsbkSaturation :: Word16 -- 0-65535
   , hsbkBrightness :: Word16 -- 0-65535
   , hsbkKelvin :: Word16 --2500-9000
-  } deriving Show
+  }
+  deriving Show
 
 data Get
   = Get
@@ -213,7 +234,8 @@ data State
   , sPower :: Word16
   , sLabel :: TL.Text
   , sReserved2 :: Word64
-  } deriving Show
+  }
+  deriving Show
 
 -- | 32 bytes
 newtype Label
@@ -243,9 +265,12 @@ data MultiZoneMessage
 
 messageTypeToWord16
  = \case
- DeviceMessageType dm -> deviceMessageTypeToWord16 dm
- LightMessageType lm -> lightMessageTypeToWord16 lm
- MultiZoneMessageType mzm -> multiZoneMessageTypeToWord16 mzm
+ DeviceMessageType dm ->
+   deviceMessageTypeToWord16 dm
+ LightMessageType lm ->
+   lightMessageTypeToWord16 lm
+ MultiZoneMessageType mzm ->
+   multiZoneMessageTypeToWord16 mzm
  where
   deviceMessageTypeToWord16 = \case
     GetServiceMessage -> 2
@@ -257,8 +282,10 @@ messageTypeToWord16
     SetColorZonesMessage -> 501
 
 
-word16ToMessageType 3 = Right $ DeviceMessageType StateServiceMessage
-word16ToMessageType x = Left $ "no case for " <> show x
+word16ToMessageType 3
+  = Right $ DeviceMessageType StateServiceMessage
+word16ToMessageType x
+  = Left $ "no case for " <> show x
 
 -- 102: Layout in bits:   8|_|32
 --                        ui|hsbk|ui
@@ -267,7 +294,8 @@ data SetColor
   { scReserved :: ()
   , scColor :: HSBK
   , scDuration :: Word32 -- ms
-  } deriving Show
+  }
+  deriving Show
 
 data GetService
   = GetService
@@ -277,7 +305,8 @@ data StateService
   = StateService
   { ssService :: Word8
   , ssPort :: Word32
-  } deriving Show
+  }
+  deriving Show
 
 mkFrame
   :: WithSize a
@@ -285,7 +314,8 @@ mkFrame
   -> Tagged
   -> UniqueSource
   -> Frame
-mkFrame par tag = Frame (size par) 0 tag HasFrameAddress 1024
+mkFrame par tag
+  = Frame (size par) 0 tag HasFrameAddress 1024
 
 mkFrameAddress
   :: Target
@@ -293,12 +323,14 @@ mkFrameAddress
   -> ResRequired
   -> Sequence
   -> FrameAddress
-mkFrameAddress tar = FrameAddress tar (UnusedMac ((), (), (), (), (), ())) ()
+mkFrameAddress tar
+  = FrameAddress tar (UnusedMac ((), (), (), (), (), ())) ()
 
 mkProtocolHeader
   :: MessageType
   -> ProtocolHeader
-mkProtocolHeader typ = ProtocolHeader 0 typ ()
+mkProtocolHeader typ
+  = ProtocolHeader 0 typ ()
 
 mkPacket
   :: ( WithSize a
@@ -313,14 +345,18 @@ mkPacket
   -> MessageType
   -> a
   -> Packet a
-mkPacket tag src tar ack res seq typ pay =
-  let f = mkFrame p tag src
-      fa = mkFrameAddress tar ack res seq
-      ph = mkProtocolHeader typ
-      p = Packet f fa ph pay
-  in p
+mkPacket tag src tar ack res seq typ pay
+  =
+  let
+    f = mkFrame p tag src
+    fa = mkFrameAddress tar ack res seq
+    ph = mkProtocolHeader typ
+    p = Packet f fa ph pay
+  in
+    p
 
-serviceUDP = 1
+serviceUDP
+  = 1
 
 newtype UniqueSource
   = UniqueSource { unUniqueSource :: Word32 }
@@ -339,38 +375,49 @@ class WithSize a where
   size :: a -> Word16
 
 instance WithSize a => WithSize (Packet a) where
-  size Packet {..} = size pFrame + size pFrameAddress + size pProtocolHeader + size pPayload
+  size Packet {..}
+    = size pFrame + size pFrameAddress + size pProtocolHeader + size pPayload
 
 instance WithSize Frame where
-  size = const 8
+  size
+    = const 8
 
 instance WithSize FrameAddress where
-  size = const 16
+  size
+    = const 16
 
 instance WithSize ProtocolHeader where
-  size = const 12
+  size
+    = const 12
 
 instance WithSize SetColor where
-  size SetColor {..} = 1 + size scColor + 4
+  size SetColor {..}
+    = 1 + size scColor + 4
 
 instance WithSize HSBK where
-  size = const 8
+  size
+    = const 8
 
 instance WithSize GetService where
-  size _ = 0
+  size _
+    = 0
 
 instance WithSize StateService where
-  size _ = 5
+  size _
+    = 5
 
 instance Binary Target where
-  put t = BinP.putWord64le $ targetToWord64 t
-  get = word64ToTarget <$> BinG.getWord64le
+  put t
+    = BinP.putWord64le $ targetToWord64 t
+  get
+    = word64ToTarget <$> BinG.getWord64le
 
 
 targetToWord64
   :: Target
   -> Word64
-targetToWord64 (Target (Mac t)) =
+targetToWord64 (Target (Mac t))
+  =
   let
     (b1, b2, b3, b4, b5, b6) = t
 
@@ -386,7 +433,8 @@ targetToWord64 (Target (Mac t)) =
 word64ToTarget
   :: Word64
   -> Target
-word64ToTarget n =
+word64ToTarget n
+  =
   let
     (b1, _) = extract' r1 1 2
     (b2, r1) = extract' r2 1 2
@@ -400,20 +448,26 @@ word64ToTarget n =
     dropped = n `shiftR` 2
 
 instance Binary UniqueSource where
-  put (UniqueSource t) = BinP.putWord32le t
-  get = pure $ UniqueSource undefined
+  put (UniqueSource t)
+    = BinP.putWord32le t
+  get
+    = pure $ UniqueSource undefined
 
 instance Binary Sequence where
-  put (Sequence t) = BinP.putWord8 t
-  get = Sequence <$> BinG.getWord8
+  put (Sequence t)
+    = BinP.putWord8 t
+  get
+    = Sequence <$> BinG.getWord8
 
 instance Binary Frame where
-  put f@Frame {..} = do
+  put f@Frame {..}
+    = do
     BinP.putWord16le fSize -- Discovered from size of rest
     putFrame2ndByte f
     Bin.put fSource
 
-  get = do
+  get
+    = do
     fSize <- BinG.getWord16le
     frame2ndByte <- BinG.getWord16le
     let
@@ -428,25 +482,29 @@ instance Binary Frame where
 
 -- | Cutting out from M to N becomes a two-step process: you shift the original value M bits to the right, and then perform a bit-wise AND with the mask of N-M ones.
 extract :: (Integral a, Bits a, Integral b) => a -> Int -> Int -> b
-extract x m n = fst $ extract' x m n
+extract x m n
+  = fst $ extract' x m n
 
 extract' :: (Integral a, Bits a, Integral b) => a -> Int -> Int -> (b, a)
-extract' x m n = (fromIntegral field, shifted)
-  where field = shifted .&. mask
-        shifted = x `shiftR` m
-        mask = bit w - 1
-        w = n - m
+extract' x m n
+  = (fromIntegral field, shifted)
+  where
+    field = shifted .&. mask
+    shifted = x `shiftR` m
+    mask = bit w - 1
+    w = n - m
 
 
-putFrame2ndByte Frame {..} =
-    BinP.putWord16le $
-      (fProtocol `shiftL` 0) +
-      (bool 0 1 (addressableToBool fAddressable) `shiftL` 12) +
-      (bool 0 1 (taggedToBool fTagged) `shiftL` 13) +
-      fromIntegral (fOrigin `shiftL` 14)
+putFrame2ndByte Frame {..}
+  = BinP.putWord16le $
+  (fProtocol `shiftL` 0) +
+  (bool 0 1 (addressableToBool fAddressable) `shiftL` 12) +
+  (bool 0 1 (taggedToBool fTagged) `shiftL` 13) +
+  fromIntegral (fOrigin `shiftL` 14)
 
 instance Binary FrameAddress where
-  put f@FrameAddress {..} = do
+  put f@FrameAddress {..}
+    = do
     Bin.put faTarget
     Bin.put faReserved
     BinP.putWord8 $
@@ -455,7 +513,8 @@ instance Binary FrameAddress where
       (0 `shiftL` 2)
     Bin.put faSequence
 
-  get = do
+  get
+    = do
     faTarget <- Bin.get
     faReserved <- Bin.get
     frameAddress15thByte <- BinG.getWord8
@@ -468,19 +527,23 @@ instance Binary FrameAddress where
     pure FrameAddress {..}
 
 instance Binary UnusedMac where
-  put _ = replicateM_ 6 $ BinP.putWord8 0
+  put _
+    = replicateM_ 6 $ BinP.putWord8 0
 
-  get = do
+  get
+    = do
     void $ replicateM_ 6 BinG.getWord8
     pure $ UnusedMac ((), (), (), (), (), ())
 
 instance Binary ProtocolHeader where
-  put p@ProtocolHeader {..} = do
+  put p@ProtocolHeader {..}
+    = do
     BinP.putWord64le 0
     BinP.putWord16le $ messageTypeToWord16 phType
     BinP.putWord16le 0
 
-  get = do
+  get
+    = do
     _ <- BinG.getWord64le
     phType_ <- word16ToMessageType <$> BinG.getWord16le
     phType <- case phType_ of
@@ -492,31 +555,39 @@ instance Binary ProtocolHeader where
     pure ProtocolHeader {phReserved = 0,phReserved2 = (),..}
 
 instance Binary SetColor where
-  put sc@SetColor {..} = do
+  put sc@SetColor {..}
+    = do
     BinP.putWord8 0
     put scColor
     BinP.putWord32le scDuration
     pure ()
 
-  get = pure $ SetColor undefined undefined undefined
+  get
+    = pure $ SetColor undefined undefined undefined
 
 instance Binary HSBK where
-  put hsbk@HSBK {..} = do
+  put hsbk@HSBK {..}
+    = do
     BinP.putWord16le hsbkHue
     BinP.putWord16le hsbkSaturation
     BinP.putWord16le hsbkBrightness
     BinP.putWord16le hsbkKelvin
     pure ()
 
-  get = pure $ HSBK undefined undefined undefined undefined
+  get
+    = pure $ HSBK undefined undefined undefined undefined
 
 instance Binary GetService where
-  put _ = pure ()
-  get = pure GetService
+  put _
+    = pure ()
+  get
+    = pure GetService
 
 instance Binary StateService where
-  put _ = pure ()
-  get = do
+  put _
+    = pure ()
+  get
+    = do
     ssService <- BinG.getWord8
     when (ssService /= 1) $ fail $ "Not a StateService mismatched service: " <> show ssService
 
@@ -524,8 +595,10 @@ instance Binary StateService where
     pure StateService {..}
 
 instance Binary Header where
-  put _ = pure ()
-  get = do
+  put _
+    = pure ()
+  get
+    = do
     hFrame <- Bin.get
     hFrameAddress <- Bin.get
     hProtocolHeader <- Bin.get
@@ -539,20 +612,25 @@ data Header
   } deriving Show
 
 
-broadcast :: Binary a => Socket -> SockAddr -> a -> IO ()
-broadcast sock bcast a = do
-  --let
-  --  hints = defaultHints { addrFlags = [AI_NUMERICHOST, AI_NUMERICSERV], addrSocketType = Stream }
-  --addr:_ <- getAddrInfo (Just hints) (Just "255.255.255.255") (Just "56700")
-  --sock <- socket (addrFamily addr) (addrSocketType addr) (addrProtocol addr)
-
+broadcast
+  :: Binary a
+  => Socket
+  -> SockAddr
+  -> a
+  -> IO ()
+broadcast sock bcast a
+  =
   let
     enc = Bin.encode a
-  sendManyTo sock (BSL.toChunks enc) bcast
--- BinP.runPut $ BinP.putInt16le ((1 `shiftL` 13) + (1 `shiftL` 12) + (1024))
+  in
+    sendManyTo sock (BSL.toChunks enc) bcast
 
 data Callback
-  = forall a. (Binary a, WithSize a) => Callback { runDecode :: Header -> BSL.ByteString -> Except PayloadDecodeError (Packet a), runCallback :: SharedState -> Packet a -> SockAddr -> IO () }
+  = forall a. (Binary a, WithSize a) =>
+  Callback
+  { runDecode :: Header -> BSL.ByteString -> Except PayloadDecodeError (Packet a)
+  , runCallback :: SharedState -> Packet a -> SockAddr -> IO ()
+  }
 
 data AppState
   = AppState
@@ -621,48 +699,47 @@ data PayloadDecodeError
   }
   deriving Show
 
+decodeHeader
+  :: BSL.ByteString
+  -> Except HeaderDecodeError (Header, BSL.ByteString)
+decodeHeader bs
+  = case Bin.decodeOrFail bs of
+  Left (str, offset, err) ->
+    throwE $ NotAHeader err bs str offset
+  Right (rem, cons, hdr) -> do
+    let
+      packetSize = fSize $ hFrame hdr
+      packetSource = fSource $ hFrame hdr
+    when (packetSize /= fromIntegral (BSL.length bs))
+      $ throwError $ ImproperSizeInHeader hdr bs rem cons
+    when (packetSource /= uniqueSource)
+      $ throwError $ ImproperSourceInHeader hdr bs rem cons
+    pure (hdr, rem)
 
+decodePacket
+  :: ( Binary a
+     , WithSize a
+     )
+  => Header
+  -> BSL.ByteString
+  -> Except PayloadDecodeError (Packet a)
+decodePacket hdr rem
+  = case Bin.decodeOrFail rem of
+  Left (str, offset, err) ->
+    throwE $ PayloadDecodeFailed hdr rem str offset err
+  Right (_, _, payload) ->
+    pure $ packetFromHeader hdr payload
 
---decodePacketThen :: _
---decodePacketThen bs cont =
---  case Bin.decodeOrFail bs of
---    Left _ -> throwError Error
---    Right (rem, cons, hdr) -> do
---      let
---        packetSize = fSize $ hFrame hdr
---        packetSource = fSource $ hFrame hdr
---      when (packetSize /= (fromIntegral $ BSL.length bs)) $ throwError Error
---      when (packetSource /= uniqueSource) $ throwError Error
---      case Bin.decodeOrFail rem of
---        Left _ -> throwError Error
---        Right (_, _, payload) -> cont payload
-
---decodePacket :: forall m a. (MonadError Error m, Binary a, WithSize a) => BSL.ByteString -> m a
-
-decodeHeader :: BSL.ByteString -> Except HeaderDecodeError (Header, BSL.ByteString)
-decodeHeader bs =
-  case Bin.decodeOrFail bs of
-    Left (str, offset, err) -> throwE $ NotAHeader err bs str offset
-    Right (rem, cons, hdr) -> do
-      let
-        packetSize = fSize $ hFrame hdr
-        packetSource = fSource $ hFrame hdr
-      when (packetSize /= fromIntegral (BSL.length bs)) $ throwError $ ImproperSizeInHeader hdr bs rem cons
-      when (packetSource /= uniqueSource) $ throwError $ ImproperSourceInHeader hdr bs rem cons
-      pure (hdr, rem)
-
-decodePacket :: (Binary a, WithSize a) => Header -> BSL.ByteString -> Except PayloadDecodeError (Packet a)
-decodePacket hdr rem =
-  case Bin.decodeOrFail rem of
-    Left (str, offset, err) -> throwE $ PayloadDecodeFailed hdr rem str offset err
-    Right (_, _, payload) -> pure $ packetFromHeader hdr payload
-
-uniqueSource = UniqueSource 1234
+uniqueSource
+  :: UniqueSource
+uniqueSource
+  = UniqueSource 1234
 
 receiveThread
   :: SharedState
   -> IO (Async ())
-receiveThread ss@SharedState {..} = async $ forever $ do
+receiveThread ss@SharedState {..}
+  = async $ forever $ do
   threadDelay $ 1 * 100000
   (bs, sa) <- recvFrom ssSocket 1500
   let
@@ -681,10 +758,10 @@ receiveThread ss@SharedState {..} = async $ forever $ do
             runCallback ss payload sa
           Left e ->
             print $ show e
-
   pure ()
 
-onStateService SharedState {..} Packet {..} sa = do
+onStateService SharedState {..} Packet {..} sa
+  = do
   let
     incomingDevice = Device (socketAddrToDeviceSocketAddr sa) (DeviceId $ unTarget $ faTarget pFrameAddress)
   atomically $ do
@@ -701,13 +778,18 @@ data FoundDevice
   {
   }
 
-socketAddrToDeviceSocketAddr (SockAddrInet pa ha) = DeviceSocketAddress pa (DeviceAddress ha)
+socketAddrToDeviceSocketAddr
+  :: SockAddr
+  -> DeviceSocketAddress
+socketAddrToDeviceSocketAddr (SockAddrInet pa ha)
+  = DeviceSocketAddress pa (DeviceAddress ha)
 
 discoveryThread
   :: SharedState
   -> SockAddr
   -> IO (Async ())
-discoveryThread ss@SharedState {..} bcast = async $ forever $ do
+discoveryThread ss@SharedState {..} bcast
+  = async $ forever $ do
   threadDelay $ 3 * 1000000
   nextSeq <- ssNextSeq
   runExceptT $ setCallbackForSeq ss nextSeq $ Callback decodePacket onStateService
@@ -733,10 +815,13 @@ setCallbackForSeq
   -> Sequence
   -> Callback
   -> m ()
-setCallbackForSeq SharedState {..} seq cont =
-  liftIO $ atomically $ writeArray ssReplyCallbacks (unSequence seq) cont
+setCallbackForSeq SharedState {..} seq cont
+  = liftIO
+  $ atomically
+  $ writeArray ssReplyCallbacks (unSequence seq) cont
 
-mkState :: IO AppState
+mkState
+  :: IO AppState
 mkState = do
   nSeq <- newTVarIO (Sequence 0)
   ssNextSeq <- pure $ atomically $ do
@@ -745,18 +830,21 @@ mkState = do
     pure val
 
   ifaces <- (HM.fromList . fmap (NI.name &&& id)) <$> NI.getNetworkInterfaces
-  let net@(NI.IPv4 hostAddr) = case HM.lookup "eth0" ifaces of
-        Just iface -> NI.ipv4 iface
-        Nothing -> undefined
+  let
+    net@(NI.IPv4 hostAddr) = case HM.lookup "eth0" ifaces of
+      Just iface -> NI.ipv4 iface
+      Nothing -> undefined
 
   ssSocket <- socket AF_INET Datagram defaultProtocol
-  let bcast = SockAddrInet (fromIntegral port) (tupleToHostAddress (255,255,255,255)) --0xffffffff -- 255.255.255.255
-      port = 56700
-      addr = SockAddrInet (port + 1) 0
+  let
+    bcast = SockAddrInet (fromIntegral port) (tupleToHostAddress (255,255,255,255))
+    port = 56700
+    addr = SockAddrInet (port + 1) 0
 
-  when (isSupportedSocketOption Broadcast) (setSocketOption ssSocket Broadcast 1)
+  when (isSupportedSocketOption Broadcast)
+    (setSocketOption ssSocket Broadcast 1)
   bind ssSocket addr
-  ssReplyCallbacks <- atomically $ newArray_ (0, 255) --newListArray (0, 255) (map (const $ Callback decodePacket $ const $ const $ pure ()) [0..255])
+  ssReplyCallbacks <- atomically $ newArray_ (0, 255)
   ssDevices <- newTVarIO mempty
 
   let
@@ -768,23 +856,22 @@ mkState = do
 
 
 instance Binary a => Binary (Packet a) where
-  put Packet {..} = do
+  put Packet {..}
+    = do
     put pFrame
     put pFrameAddress
     put pProtocolHeader
     put pPayload
 
-  get = pure $ Packet undefined undefined undefined undefined
+  get
+    = pure $ Packet undefined undefined undefined undefined
 
-packetFromHeader Header {..} payload = Packet hFrame hFrameAddress hProtocolHeader payload
-
--- Example
---
--- HEX: 31 00 00 34 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 66 00 00 00 00 55 55 FF FF FF FF AC 0D 00 04 00 00
--- set all to green
---
--- Frame 49 0 True True 1024 0
--- FrameAddress 0 (0,0,0,0,0,0) () False False 0
--- ProtocolHeader 0 102 ()
--- Payload
---    SetColor 0 (HSBK 21845 65535 65535 3500) 1024
+packetFromHeader
+  :: ( Binary a
+     , WithSize a
+     )
+  => Header
+  -> a
+  -> Packet a
+packetFromHeader Header {..} payload
+  = Packet hFrame hFrameAddress hProtocolHeader payload
