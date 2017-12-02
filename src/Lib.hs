@@ -839,7 +839,7 @@ mkState = do
   let
     bcast = SockAddrInet (fromIntegral port) (tupleToHostAddress (255,255,255,255))
     port = 56700
-    addr = SockAddrInet (port + 1) 0
+    addr = SockAddrInet (port + 1) 0 -- If we bind to 56700 we receive our own GetService broadcast...
 
   when (isSupportedSocketOption Broadcast)
     (setSocketOption ssSocket Broadcast 1)
