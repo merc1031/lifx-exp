@@ -91,6 +91,7 @@ import qualified  Data.ByteString.Base16.Lazy   as BSL16
 import qualified  Data.ByteString.Lazy          as BSL
 import qualified  Data.HashMap.Strict           as HM
 import qualified  Data.Text.Lazy                as TL
+import qualified  Data.Text.Lazy.Encoding       as TLE
 import qualified  Network.Info                  as NI
 
 
@@ -229,20 +230,17 @@ data HSBK
 data Get
   = Get
 
-data State
-  = State
-  { sColor :: HSBK
-  , sReserved :: Int16
-  , sPower :: Word16
-  , sLabel :: TL.Text
-  , sReserved2 :: Word64
-  }
-  deriving Show
-
 -- | 32 bytes
 newtype Label
   = Label { unLabel :: TL.Text }
   deriving Show
+
+instance Binary Label where
+  put
+    = Bin.put . unLabel
+  get
+    = (Label . TLE.decodeUtf8) <$> BinG.getLazyByteString 32
+
 
 data MessageType
   = DeviceMessageType DeviceMessage
@@ -250,19 +248,73 @@ data MessageType
   | MultiZoneMessageType MultiZoneMessage
   deriving Show
 
+data ReplyType
+  = DeviceReplyType DeviceReply
+  | LightReplyType LightReply
+  | MultiZoneReplyType MultiZoneReply
+  deriving Show
+
 data DeviceMessage
   = GetServiceMessage
-  | StateServiceMessage
+  -- HostInfo
+  -- HostFirmware
+  -- WifiInfo
+  -- WifiFirmware
+  | GetPowerMessage
+  | SetPowerMessage
+  | GetLabelMessage
+  | SetLabelMessage
+  -- Version
+  | GetInfoMessage
+  | GetLocationMessage
+  | SetLocationMessage
+  | GetGroupMessage
+  | SetGroupMessage
+  | EchoMessage
   deriving Show
 
 data LightMessage
   = GetMessage
   | SetColorMessage
-  | StateMessage
+  | SetWaveformMessage
+  | SetWaveformOptionalMessage
+  | GetLightPowerMessage
+  | SetLightPowerMessage
+  | GetInfraredMessage
+  | SetInfraredMessage
   deriving Show
+
 
 data MultiZoneMessage
   = SetColorZonesMessage
+  | GetColorZonesMessage
+  deriving Show
+
+data DeviceReply
+  = StateServiceReply
+  -- HostInfo
+  -- HostFirmware
+  -- WifiInfo
+  -- WifiFirmware
+  | StatePowerReply
+  | StateLabelReply
+  -- Version
+  | StateInfoReply
+  | AcknowledgementReply
+  | StateLocationReply
+  | StateGroupReply
+  | EchoReply
+  deriving Show
+
+data LightReply
+  = StateReply
+  | StateInfraredReply
+  | StateLightPowerReply
+  deriving Show
+
+data MultiZoneReply
+  = StateZoneReply
+  | StateMultiZoneReply
   deriving Show
 
 messageTypeToWord16
@@ -276,18 +328,181 @@ messageTypeToWord16
  where
   deviceMessageTypeToWord16 = \case
     GetServiceMessage -> 2
+    GetPowerMessage -> 20
+    SetPowerMessage -> 21
+    GetLabelMessage -> 23
+    SetLabelMessage -> 24
+    GetInfoMessage -> 34
+    GetLocationMessage -> 48
+    SetLocationMessage -> 49
+    GetGroupMessage -> 51
+    SetGroupMessage -> 52
+    EchoMessage -> 58
   lightMessageTypeToWord16 = \case
     GetMessage -> 101
     SetColorMessage -> 102
-    StateMessage -> 107
+    SetWaveformMessage -> 103
+    SetWaveformOptionalMessage -> 119
+    GetLightPowerMessage -> 116
+    SetLightPowerMessage -> 117
+    GetInfraredMessage -> 121
+    SetInfraredMessage -> 122
   multiZoneMessageTypeToWord16 = \case
     SetColorZonesMessage -> 501
+    GetColorZonesMessage -> 502
 
+-- 13 15 17 19 are unused  33
+word16ToReplyType 3
+  = Right $ DeviceReplyType StateServiceReply
+word16ToReplyType 22
+  = Right $ DeviceReplyType StatePowerReply
+word16ToReplyType 25
+  = Right $ DeviceReplyType StateLabelReply
+word16ToReplyType 35
+  = Right $ DeviceReplyType StateInfoReply
+word16ToReplyType 45
+  = Right $ DeviceReplyType AcknowledgementReply
+word16ToReplyType 50
+  = Right $ DeviceReplyType StateLocationReply
+word16ToReplyType 53
+  = Right $ DeviceReplyType StateGroupReply
+word16ToReplyType 59
+  = Right $ DeviceReplyType EchoReply
 
-word16ToMessageType 3
-  = Right $ DeviceMessageType StateServiceMessage
+word16ToReplyType 107
+  = Right $ LightReplyType StateReply
+word16ToReplyType 118
+  = Right $ LightReplyType StateLightPowerReply
+word16ToReplyType 121
+  = Right $ LightReplyType StateInfraredReply
+
+word16ToReplyType 503
+  = Right $ MultiZoneReplyType StateZoneReply
+word16ToReplyType 506
+  = Right $ MultiZoneReplyType StateMultiZoneReply
+
 word16ToMessageType x
   = Left $ "no case for " <> show x
+
+
+data GetPower
+  = GetPower
+  deriving Show
+
+instance Binary GetPower where
+  put
+    = const $ pure ()
+  get
+    = pure GetPower
+
+data GetLabel
+  = GetLabel
+  deriving Show
+
+instance Binary GetLabel where
+  put
+    = const $ pure ()
+  get
+    = pure GetLabel
+
+data GetInfo
+  = GetInfo
+  deriving Show
+
+instance Binary GetInfo where
+  put
+    = const $ pure ()
+  get
+    = pure GetInfo
+
+data GetLocation
+  = GetLocation
+  deriving Show
+
+instance Binary GetLocation where
+  put
+    = const $ pure ()
+  get
+    = pure GetLocation
+
+data GetGroup
+  = GetGroup
+  deriving Show
+
+instance Binary GetGroup where
+  put
+    = const $ pure ()
+  get
+    = pure GetGroup
+
+data SetPower
+  = SetPower
+  { spLevel :: Word16 }
+  deriving Show
+
+instance Binary SetPower where
+  put
+    = BinP.putWord16le . spLevel
+  get
+    = SetPower <$> BinG.getWord16le
+
+data StatePower
+  = StatePower
+  { stpLevel :: Word16 }
+  deriving Show
+
+instance Binary StatePower where
+  put
+    = BinP.putWord16le . stpLevel
+  get
+    = StatePower <$> BinG.getWord16le
+
+data SetLabel
+  = SetLabel
+  { stlLabel :: Label }
+  deriving Show
+
+instance Binary SetLabel where
+  put
+    = Bin.put . stlLabel
+  get
+    = SetLabel <$> Bin.get
+
+data State
+  = State
+  { sColor :: HSBK
+  , sReserved :: Int16
+  , sPower :: Word16
+  , sLabel :: Label
+  , sReserved2 :: Word64
+  }
+  deriving Show
+
+instance Binary State where
+  put State {..}
+    = do
+    Bin.put sColor
+    BinP.putInt16le sReserved
+    BinP.putWord16le sPower
+    Bin.put sLabel
+    BinP.putWord64le sReserved2
+  get
+    = State
+    <$> Bin.get
+    <*> BinG.getInt16le
+    <*> BinG.getWord16le
+    <*> Bin.get
+    <*> BinG.getWord64le
+
+data Acknowledgement
+  = Acknowledgement
+  deriving Show
+
+instance Binary Acknowledgement where
+  put
+    = const $ pure ()
+  get
+    = pure Acknowledgement
 
 -- 102: Layout in bits:   8|_|32
 --                        ui|hsbk|ui
