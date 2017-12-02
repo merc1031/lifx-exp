@@ -2,6 +2,7 @@
 module Main where
 
 import Lib
+import Control.Concurrent
 import Control.Concurrent.Async
 import Options.Applicative
 import Data.Semigroup ((<>))
@@ -40,8 +41,12 @@ sample = Config <$>
 
 main :: IO ()
 main = do
-  r <- mkState
   Config {..} <- customExecParser p opts
+  r <- mkState
+  threadDelay 100000
+
+  cached <- listCached (asSharedState r)
+  print cached
 
   wait $ asReceiveThread r
   wait $ asDiscoveryThread r

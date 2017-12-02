@@ -20,6 +20,7 @@ import            Control.Arrow
 import            Control.Concurrent
 import            Control.Concurrent.Async
 import            Control.Concurrent.STM
+import            Control.Concurrent.STM.TQueue
 import            Control.Monad                 ( forM_
                                                 , replicateM_
                                                 , when
@@ -162,6 +163,38 @@ boolToResRequired False
 boolToResRequired True
   = ResRequired
 
+--data Command
+--  = C
+--
+--data CommandEntry a
+--  = CommandEntry
+--  { cAct :: Command
+--  , cRes :: TMVar a
+--  }
+
+data DeviceIdentifier
+  = IdMac
+  | IdIp
+  | IdName
+  deriving (Show, Eq)
+
+listCached SharedState {..}
+  = do
+  HM.elems <$> (atomically $ readTVar ssDevices)
+
+--listALight identifier
+--  = do
+  -- Make a get packet
+  -- make a result var
+  -- async issue request
+  -- -- which might issue more requests
+  -- when all fullfilled fill result var
+  -- return result var
+  --
+
+  
+--newtype CommandQueue
+--  = CommandQueue TQueue
 -- Little endian
 --
 --
@@ -202,7 +235,7 @@ newtype UnusedMac
 data ProtocolHeader
   = ProtocolHeader
   { phReserved :: Word64
-  , phType :: MessageType
+  , phType :: Direction
   , phReserved2 :: ()
   }
   deriving Show
@@ -241,6 +274,10 @@ instance Binary Label where
   get
     = (Label . TLE.decodeUtf8) <$> BinG.getLazyByteString 32
 
+data Direction
+  = Request MessageType
+  | Reply ReplyType
+  deriving Show
 
 data MessageType
   = DeviceMessageType DeviceMessage
@@ -381,7 +418,7 @@ word16ToReplyType 503
 word16ToReplyType 506
   = Right $ MultiZoneReplyType StateMultiZoneReply
 
-word16ToMessageType x
+word16ToReplyType x
   = Left $ "no case for " <> show x
 
 
@@ -547,7 +584,7 @@ mkProtocolHeader
   :: MessageType
   -> ProtocolHeader
 mkProtocolHeader typ
-  = ProtocolHeader 0 typ ()
+  = ProtocolHeader 0 (Request typ) ()
 
 mkPacket
   :: ( WithSize a
@@ -754,18 +791,20 @@ instance Binary UnusedMac where
 
 instance Binary ProtocolHeader where
   put p@ProtocolHeader {..}
-    = do
-    BinP.putWord64le 0
-    BinP.putWord16le $ messageTypeToWord16 phType
-    BinP.putWord16le 0
+    = case phType of
+    Request phTypeR -> do
+      BinP.putWord64le 0
+      BinP.putWord16le $ messageTypeToWord16 phTypeR
+      BinP.putWord16le 0
+    x -> fail $ "Attempting to encode a reply type" <> show x
 
   get
     = do
     _ <- BinG.getWord64le
-    phType_ <- word16ToMessageType <$> BinG.getWord16le
+    phType_ <- word16ToReplyType <$> BinG.getWord16le
     phType <- case phType_ of
       Left p -> fail $ show p
-      Right p -> pure p
+      Right p -> pure $ Reply p --TODO FIxme
 
     _ <- BinG.getWord16le
 
@@ -839,7 +878,8 @@ broadcast sock bcast a
   =
   let
     enc = Bin.encode a
-  in
+  in do
+    print $ "What we want to write " <> (show $ BSL16.encode enc)
     sendManyTo sock (BSL.toChunks enc) bcast
 
 data Callback
@@ -851,7 +891,8 @@ data Callback
 
 data AppState
   = AppState
-  { asReceiveThread :: Async ()
+  { asSharedState :: SharedState
+  , asReceiveThread :: Async ()
   , asDiscoveryThread :: Async ()
   }
 
@@ -985,12 +1026,15 @@ receiveThread
   -> IO (Async ())
 receiveThread ss@SharedState {..}
   = async $ forever $ do
-  threadDelay $ 1 * 100000
+  print "Receiving"
   (bs, sa) <- recvFrom ssSocket 1500
   let
     headerE = runExcept $ decodeHeader (BSL.fromStrict bs)
 
+  print $ "Got Data: " <> (show $ BSL16.encode $ BSL.fromStrict bs)
+  print $ "Got Header: " <> show headerE
   forM_ headerE $ \(header, rest) -> async $ do
+    print "Forked"
     let
       Sequence seq = faSequence $ hFrameAddress header
     cb <- atomically $ readArray ssReplyCallbacks seq
@@ -1013,7 +1057,7 @@ onStateService SharedState {..} Packet {..} sa
     devs <- readTVar ssDevices
     case dDeviceId incomingDevice `HM.lookup` devs of
       Just l -> todo
-      Nothing ->  todo
+      Nothing -> writeTVar ssDevices $ HM.insert (dDeviceId incomingDevice) incomingDevice devs
   where
     StateService {..} = pPayload
     todo = pure ()
@@ -1035,7 +1079,7 @@ discoveryThread
   -> IO (Async ())
 discoveryThread ss@SharedState {..} bcast
   = async $ forever $ do
-  threadDelay $ 3 * 1000000
+  print "Discovering"
   nextSeq <- ssNextSeq
   runExceptT $ setCallbackForSeq ss nextSeq $ Callback decodePacket onStateService
   broadcast
@@ -1050,7 +1094,7 @@ discoveryThread ss@SharedState {..} bcast
         nextSeq
         (DeviceMessageType GetServiceMessage)
         GetService
-  pure ()
+  threadDelay $ 3 * 1000000
 
 setCallbackForSeq
   :: ( MonadError e m
@@ -1097,7 +1141,7 @@ mkState = do
   asReceiveThread <- receiveThread sharedState
   asDiscoveryThread <- discoveryThread sharedState bcast
 
-  pure $ AppState asReceiveThread asDiscoveryThread
+  pure $ AppState sharedState asReceiveThread asDiscoveryThread
 
 
 instance Binary a => Binary (Packet a) where
