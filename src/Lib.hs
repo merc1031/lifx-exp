@@ -649,8 +649,11 @@ data SharedState
   }
 
 newtype Mac a
-  = Mac (a, a, a, a, a, a)
+  = Mac { unMac :: (a, a, a, a, a, a) }
   deriving (Show, Eq, Hashable)
+
+instance Functor Mac where
+  fmap g (Mac (a,b,c,d,e,f)) = Mac (g a, g b, g c, g d, g e, g f)
 
 printMac
   :: ( Num a
@@ -663,7 +666,7 @@ printMac
 printMac m
   = show m <> "( " <> hex m <> " )"
   where
-    hex (Mac (hexS -> s1, hexS -> s2, hexS -> s3, hexS -> s4, hexS -> s5, hexS -> s6))
+    hex (fmap hexS -> unMac -> (s1, s2, s3, s4, s5, s6))
       = s1
       <> ":"
       <> s2
