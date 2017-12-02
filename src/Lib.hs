@@ -13,6 +13,7 @@
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE ViewPatterns #-}
 module Lib where
 
 import            Control.Arrow
@@ -80,7 +81,8 @@ import            Network.Socket                ( Socket (..)
                                                 , PortNumber
                                                 )
 import            Network.Socket.ByteString
-import            Numeric
+import            Numeric                       ( showHex )
+import            Text.Printf
 import qualified  Data.Binary                   as Bin
 import qualified  Data.Binary.Bits              as Bits
 import qualified  Data.Binary.Get               as BinG
@@ -191,7 +193,7 @@ data FrameAddress
 
 
 newtype UnusedMac
-  = UnusedMac ((), (), (), (), (), ())
+  = UnusedMac (Mac ())
   deriving Show
 
 -- Layout in bits:   64|16|16
@@ -324,7 +326,7 @@ mkFrameAddress
   -> Sequence
   -> FrameAddress
 mkFrameAddress tar
-  = FrameAddress tar (UnusedMac ((), (), (), (), (), ())) ()
+  = FrameAddress tar (UnusedMac $ Mac ((), (), (), (), (), ())) ()
 
 mkProtocolHeader
   :: MessageType
@@ -363,7 +365,7 @@ newtype UniqueSource
   deriving (Show, Eq)
 
 newtype Target
-  = Target { unTarget :: Mac {-Word64-} }
+  = Target { unTarget :: Mac Word8 {-Word64-} }
   deriving Show
 
 newtype Sequence
@@ -533,7 +535,7 @@ instance Binary UnusedMac where
   get
     = do
     void $ replicateM_ 6 BinG.getWord8
-    pure $ UnusedMac ((), (), (), (), (), ())
+    pure $ UnusedMac $ Mac ((), (), (), (), (), ())
 
 instance Binary ProtocolHeader where
   put p@ProtocolHeader {..}
@@ -646,12 +648,37 @@ data SharedState
   , ssNextSeq :: IO Sequence
   }
 
-newtype Mac
-  = Mac (Word8, Word8, Word8, Word8, Word8, Word8)
+newtype Mac a
+  = Mac (a, a, a, a, a, a)
   deriving (Show, Eq, Hashable)
 
+printMac
+  :: ( Num a
+     , Integral a
+     , Show a
+     , PrintfArg a
+     )
+  => Mac a
+  -> String
+printMac m
+  = show m <> "( " <> hex m <> " )"
+  where
+    hex (Mac (hexS -> s1, hexS -> s2, hexS -> s3, hexS -> s4, hexS -> s5, hexS -> s6))
+      = s1
+      <> ":"
+      <> s2
+      <> ":"
+      <> s3
+      <> ":"
+      <> s4
+      <> ":"
+      <> s5
+      <> ":"
+      <> s6
+    hexS = printf "%02x"
+
 newtype DeviceId
-  = DeviceId Mac
+  = DeviceId (Mac Word8)
   deriving (Show, Eq, Hashable)
 
 newtype DeviceAddress
