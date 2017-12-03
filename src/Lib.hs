@@ -789,12 +789,12 @@ targetToWord64 (Target (Mac t))
   let
     (b1, b2, b3, b4, b5, b6) = t
 
-    r8 = fromIntegral b6 `shiftL` 2
-    r7 = fromIntegral b5 `shiftL` 3
-    r6 = fromIntegral b4 `shiftL` 4
-    r5 = fromIntegral b3 `shiftL` 5
-    r4 = fromIntegral b2 `shiftL` 6
-    r3 = fromIntegral b1 `shiftL` 7
+    r8 = fromIntegral b6 `shiftL` 48
+    r7 = fromIntegral b5 `shiftL` 32
+    r6 = fromIntegral b4 `shiftL` 24
+    r5 = fromIntegral b3 `shiftL` 16
+    r4 = fromIntegral b2 `shiftL` 8
+    r3 = fromIntegral b1 `shiftL` 0
   in
     r8 + r7 + r6 + r5 + r4 + r3
 
@@ -804,16 +804,14 @@ word64ToTarget
 word64ToTarget n
   =
   let
-    (b1, _) = extract' r1 1 2
-    (b2, r1) = extract' r2 1 2
-    (b3, r2) = extract' r3 1 2
-    (b4, r3) = extract' r4 1 2
-    (b5, r4) = extract' r5 1 2
-    (b6, r5) = extract' dropped 1 2
+    b6 = extract n 40 48
+    b5 = extract n 32 40
+    b4 = extract n 24 32
+    b3 = extract n 16 24
+    b2 = extract n 8 16
+    b1 = extract n 0 8
   in
     Target $ Mac (b1, b2, b3, b4, b5, b6)
-  where
-    dropped = n `shiftR` 2
 
 instance Binary UniqueSource where
   put (UniqueSource t)
@@ -978,6 +976,24 @@ instance Binary Header where
     hProtocolHeader <- Bin.get
     pure Header {..}
 
+-- size
+-- origin
+-- tagged
+-- addressable
+-- protocol
+-- source
+-- target
+-- reserved
+-- reserved
+-- ack
+-- res
+-- sequence
+-- reserved
+-- type
+-- reserved
+-- 16|2|1|1|12|32|64|48|6|1|1|8|64|16|16
+-- ui|ui|b|b|ui|ui|ui|ui|r|b|b|ui|ui|ui|r
+--                   [6]
 data Header
   = Header
   { hFrame :: !Frame
@@ -1008,7 +1024,7 @@ data Callback
   = forall a. (Show a, Binary a, WithSize a) =>
   Callback
   { runDecode :: !(Header -> BSL.ByteString -> Except PayloadDecodeError (Packet a))
-  , runCallback :: !(SharedState -> Packet a -> SockAddr -> IO ())
+  , runCallback :: !(SharedState -> Packet a -> SockAddr -> BSL.ByteString -> IO ())
   }
 
 instance Show Callback where
@@ -1139,28 +1155,6 @@ decodeHeader bs
       $ throwE $ ImproperSourceInHeader hdr bs rema cons
     pure (hdr, rema)
 
---decodeHeaderIO
---  :: BSL.ByteString
---  -> IO (Header, BSL.ByteString)
---decodeHeaderIO bs
---  =
---  let
---    decd = Bin.decodeOrFail bs
---  in do
---    print $ show decd
---    case decd of
---      Left (str, offset, err) ->
---        throwIO $ NotAHeader err bs str offset
---      Right (rema, cons, hdr) -> do
---        let
---          packetSize = fSize $ hFrame hdr
---          packetSource = fSource $ hFrame hdr
---        when (packetSize /= fromIntegral (BSL.length bs))
---          $ throwIO $ ImproperSizeInHeader hdr bs rema cons
---        when (packetSource /= uniqueSource)
---          $ throwIO $ ImproperSourceInHeader hdr bs rema cons
---        pure (hdr, rema)
-
 decodePacket
   :: ( Binary a
      , WithSize a
@@ -1184,53 +1178,32 @@ receiveThread
   :: SharedState
   -> IO (Async ())
 receiveThread ss@SharedState {..}
-  = do
-  logStr "Start Receive thread"
-  async $ forever $ do
-    logStr "Wanting data"
-    (!bs, sa) <- recvFrom ssSocket 1500
-    print $ "Got data: " <> (BSL.fromStrict bs)
-    print $ "From addr: " <> show sa
-    let
-      headerE = runExcept $ decodeHeader (BSL.fromStrict bs)
-    --void $ evaluate $ force headerE
-    --headerE <- try @HeaderDecodeError $ decodeHeaderIO (BSL.fromStrict bs)
-    logStr "After headerE"
-    print $ "HeaderE: " <> show headerE
+  = async $ forever $ do
+  (!bs, sa) <- recvFrom ssSocket 1500
+  let
+    bsl = BSL.fromStrict bs
+    headerE = runExcept $ decodeHeader bsl
 
-    case headerE of
-      Right (header, rest) -> {-async $-} do
+  forM_ headerE $ \(header, rest) -> async $ do
+    let
+      Sequence sequ = faSequence $ hFrameAddress header
+    cb <- atomically $ readArray ssReplyCallbacks sequ
+    case cb of
+      Callback {..} -> do
         let
-          Sequence sequ = faSequence $ hFrameAddress header
-        print $ "Got sequence, type " <> show sequ <> " " <> show (phType $ hProtocolHeader header)
-        cb <- atomically $ readArray ssReplyCallbacks sequ
-        print $ "Callback in array for sequence " <> show cb
-        case cb of
-          Callback {..} -> do
-            print $ "Rest of data: " <> show rest
-            print $ "Whole header: " <> show (hProtocolHeader header)
-            print $ "Whole header: " <> show (hFrameAddress header)
-            print $ "Whole header: " <> show (hFrame header)
-            print $ "Whole header: " <> show header
-            let
-              payloadE = runExcept $ runDecode header rest
-            case payloadE of
-              Right payload -> do
-                print $ "payloadE: " <> show payload
-                runCallback ss payload sa
-              Left e ->
-                print $ "ERROR " <> show e
-      Left r -> print $ "WHATTTT: " <> show r
-    logStr "After Receive"
+          payloadE = runExcept $ runDecode header rest
+        forM_ payloadE $ \payload ->
+          runCallback ss payload sa bsl
 
 onStateService
   :: SharedState
   -> Packet StateService
   -> SockAddr
+  -> BSL.ByteString
   -> IO ()
-onStateService SharedState {..} Packet {..} sa
+onStateService SharedState {..} Packet {..} sa orig
   = do
-  logStr "Got State Service"
+  logStr $ "Got State Service " <> show pPayload <> " " <> show sa <> " " <> show pFrameAddress <> (show $ BSL16.encode orig)
   forM_ (socketAddrToDeviceSocketAddr sa) $ \sa' -> do
     let
       incomingDevice = Device sa' (DeviceId $ unTarget $ faTarget pFrameAddress)
@@ -1268,9 +1241,7 @@ discoveryThread
 discoveryThread ss@SharedState {..} bcast
   = async $ forever $ do
   nextSeq <- ssNextSeq
-  print $ "Discovering Sequence: " <> show nextSeq
-  res <- setCallbackForSeq ss nextSeq $ Callback decodePacket onStateService
-  print $ "Do we die?" <> show res
+  setCallbackForSeq ss nextSeq $ Callback decodePacket onStateService
   broadcast
     ssSocket
     bcast
@@ -1279,7 +1250,7 @@ discoveryThread ss@SharedState {..} bcast
         uniqueSource
         (word64ToTarget 0)
         NoAckRequired
-        ResRequired
+        NoResRequired
         nextSeq
         (DeviceMessageType GetServiceMessage)
         GetService

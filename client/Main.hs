@@ -1,6 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE PartialTypeSignatures #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# OPTIONS_GHC -fno-warn-partial-type-signatures #-}
 module Main where
 
 import Lib
@@ -54,10 +55,10 @@ main :: IO ()
 main = do
   Config {..} <- customExecParser p opts
   r <- mkState
-  --threadDelay 10000000
+  threadDelay 1000000
 
-  --cached <- listCached (asSharedState r)
-  --print cached
+  cached <- listCached (asSharedState r)
+  print cached
 
   resR <- waitCatch $ asReceiveThread r
   resD <- waitCatch $ asDiscoveryThread r
