@@ -1,7 +1,10 @@
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE PartialTypeSignatures #-}
 {-# LANGUAGE RecordWildCards #-}
 module Main where
 
 import Lib
+import qualified Data.Binary as Bin
 import Control.Concurrent
 import Control.Concurrent.Async
 import Options.Applicative
@@ -39,17 +42,27 @@ sample = Config <$>
     )
 
 
+checkSanity
+  :: IO ()
+checkSanity = do
+  let
+    decd :: Either _ (_,_, Header)
+    decd = Bin.decodeOrFail ")\NUL\NUL\DC4\210\EOT\NUL\NUL\208s\213%Y\SYN\NUL\NULLIFXV2\SOH\NUL\NUL\241\222i-\238\EOT\NUL\ETX\NUL\NUL\NUL\SOH|\221\NUL\NUL"
+  print $ show decd
+
 main :: IO ()
 main = do
   Config {..} <- customExecParser p opts
   r <- mkState
-  threadDelay 100000
+  --threadDelay 10000000
 
-  cached <- listCached (asSharedState r)
-  print cached
+  --cached <- listCached (asSharedState r)
+  --print cached
 
-  wait $ asReceiveThread r
-  wait $ asDiscoveryThread r
+  resR <- waitCatch $ asReceiveThread r
+  resD <- waitCatch $ asDiscoveryThread r
+  print $ "Result of receive " <> show resR
+  print $ "Result of discovery " <> show resD
   where
     opts = info (sample <**> helper) idm
     p = prefs showHelpOnEmpty

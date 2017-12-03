@@ -1,3 +1,5 @@
+{-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE EmptyDataDecls #-}
@@ -8,12 +10,15 @@
 {-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE MagicHash #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE ViewPatterns #-}
+{-# OPTIONS_GHC -fno-warn-unused-imports #-}
+
 module Lib where
 
 import            Control.Arrow
@@ -21,6 +26,10 @@ import            Control.Concurrent
 import            Control.Concurrent.Async
 import            Control.Concurrent.STM
 import            Control.Concurrent.STM.TQueue
+import            Control.DeepSeq
+import            Control.DeepSeq.Generics
+import            GHC.Generics
+import            Control.Exception
 import            Control.Monad                 ( forM_
                                                 , replicateM_
                                                 , when
@@ -99,22 +108,35 @@ import qualified  Network.Info                  as NI
 data Tagged
   = SingleTagged -- Encodes as 0, means FrameAddress `target` must be a MAC
   | AllTagged -- Encodes as 1, means FrameAddress must be 0 and will be sent to all lights
-  deriving Show
+  deriving (Show, Generic)
+
+instance NFData Tagged where
+  rnf = genericRnfV1
+
 
 data Addressable
   = NoFrameAddress
   | HasFrameAddress -- Encodes as 1, always, meaning a `target` field exists
-  deriving Show
+  deriving (Show, Generic)
+
+instance NFData Addressable where
+  rnf = genericRnfV1
 
 data AckRequired
   = NoAckRequired
   | AckRequired
-  deriving Show
+  deriving (Show, Generic)
+
+instance NFData AckRequired where
+  rnf = genericRnfV1
 
 data ResRequired
   = NoResRequired
   | ResRequired
-  deriving Show
+  deriving (Show, Generic)
+
+instance NFData ResRequired where
+  rnf = genericRnfV1
 
 
 data Reserved (d :: Symbol) a
@@ -123,41 +145,65 @@ data Reserved (d :: Symbol) a
 data Sized (n :: Nat) a
 
 
+taggedToBool
+  :: Tagged
+  -> Bool
 taggedToBool SingleTagged
   = False
 taggedToBool AllTagged
   = True
 
+addressableToBool
+  :: Addressable
+  -> Bool
 addressableToBool NoFrameAddress
   = False
 addressableToBool HasFrameAddress
   = True
 
+ackRequiredToBool
+  :: AckRequired
+  -> Bool
 ackRequiredToBool NoAckRequired
   = False
 ackRequiredToBool AckRequired
   = True
 
+resRequiredToBool
+  :: ResRequired
+  -> Bool
 resRequiredToBool NoResRequired
   = False
 resRequiredToBool ResRequired
   = True
 
+boolToTagged
+  :: Bool
+  -> Tagged
 boolToTagged False
   = SingleTagged
 boolToTagged True
   = AllTagged
 
+boolToAddressable
+  :: Bool
+  -> Addressable
 boolToAddressable False
   = NoFrameAddress
 boolToAddressable True
   = HasFrameAddress
 
+boolToAckRequired
+  :: Bool
+  -> AckRequired
 boolToAckRequired False
   = NoAckRequired
 boolToAckRequired True
   = AckRequired
 
+boolToResRequired
+  :: Bool
+  -> ResRequired
 boolToResRequired False
   = NoResRequired
 boolToResRequired True
@@ -178,6 +224,9 @@ data DeviceIdentifier
   | IdName
   deriving (Show, Eq)
 
+listCached
+  :: SharedState
+  -> IO [Device]
 listCached SharedState {..}
   = do
   HM.elems <$> (atomically $ readTVar ssDevices)
@@ -202,43 +251,57 @@ listCached SharedState {..}
 --                   ui|ui|b|b|ui|ui
 data Frame
   = Frame
-  { fSize :: Word16
-  , fOrigin :: Word8 -- 0
-  , fTagged :: Tagged
-  , fAddressable :: Addressable -- 1
-  , fProtocol :: Word16 -- 1024
-  , fSource :: UniqueSource
+  { fSize :: !Word16
+  , fOrigin :: !Word8 -- 0
+  , fTagged :: !Tagged
+  , fAddressable :: !Addressable -- 1
+  , fProtocol :: !Word16 -- 1024
+  , fSource :: !UniqueSource
   }
-  deriving Show
+  deriving (Show, Generic)
+
+instance NFData Frame where
+  rnf = genericRnfV1
+
 
 -- Layout in bits:   64|48|6|1|1|8
 --                   ui|ui|r|b|b|ui
 --                      [6]
 data FrameAddress
   = FrameAddress
-  { faTarget :: Target
-  , faReserved :: UnusedMac -- 0
-  , faReserved2 :: ()
-  , faAckRequired :: AckRequired
-  , faResRequired :: ResRequired
-  , faSequence :: Sequence
+  { faTarget :: !Target
+  , faReserved :: !UnusedMac -- 0
+  , faReserved2 :: !()
+  , faAckRequired :: !AckRequired
+  , faResRequired :: !ResRequired
+  , faSequence :: !Sequence
   }
-  deriving Show
+  deriving (Show, Generic)
+
+instance NFData FrameAddress where
+  rnf = genericRnfV1
 
 
 newtype UnusedMac
   = UnusedMac (Mac ())
-  deriving Show
+  deriving (Show, Generic)
+
+instance NFData UnusedMac where
+  rnf = genericRnfV1
 
 -- Layout in bits:   64|16|16
 --                   ui|ui|r
 data ProtocolHeader
   = ProtocolHeader
-  { phReserved :: Word64
-  , phType :: Direction
-  , phReserved2 :: ()
+  { phReserved :: !Word64
+  , phType :: !Direction
+  , phReserved2 :: !()
   }
-  deriving Show
+  deriving (Show, Generic)
+
+instance NFData ProtocolHeader where
+  rnf = genericRnfV1
+
 
 data Packet a
   = Packet
@@ -253,10 +316,10 @@ data Packet a
 --                   ui|ui|ui|ui
 data HSBK
   = HSBK
-  { hsbkHue :: Word16 -- 0-65535
-  , hsbkSaturation :: Word16 -- 0-65535
-  , hsbkBrightness :: Word16 -- 0-65535
-  , hsbkKelvin :: Word16 --2500-9000
+  { hsbkHue :: !Word16 -- 0-65535
+  , hsbkSaturation :: !Word16 -- 0-65535
+  , hsbkBrightness :: !Word16 -- 0-65535
+  , hsbkKelvin :: !Word16 --2500-9000
   }
   deriving Show
 
@@ -277,19 +340,31 @@ instance Binary Label where
 data Direction
   = Request MessageType
   | Reply ReplyType
-  deriving Show
+  deriving (Show, Generic)
+
+instance NFData Direction where
+  rnf = genericRnfV1
+
 
 data MessageType
   = DeviceMessageType DeviceMessage
   | LightMessageType LightMessage
   | MultiZoneMessageType MultiZoneMessage
-  deriving Show
+  deriving (Show, Generic)
+
+instance NFData MessageType where
+  rnf = genericRnfV1
+
 
 data ReplyType
   = DeviceReplyType DeviceReply
   | LightReplyType LightReply
   | MultiZoneReplyType MultiZoneReply
-  deriving Show
+  deriving (Show, Generic)
+
+instance NFData ReplyType where
+  rnf = genericRnfV1
+
 
 data DeviceMessage
   = GetServiceMessage
@@ -308,7 +383,10 @@ data DeviceMessage
   | GetGroupMessage
   | SetGroupMessage
   | EchoMessage
-  deriving Show
+  deriving (Show, Generic)
+
+instance NFData DeviceMessage where
+  rnf = genericRnfV1
 
 data LightMessage
   = GetMessage
@@ -319,13 +397,19 @@ data LightMessage
   | SetLightPowerMessage
   | GetInfraredMessage
   | SetInfraredMessage
-  deriving Show
+  deriving (Show, Generic)
+
+instance NFData LightMessage where
+  rnf = genericRnfV1
 
 
 data MultiZoneMessage
   = SetColorZonesMessage
   | GetColorZonesMessage
-  deriving Show
+  deriving (Show, Generic)
+
+instance NFData MultiZoneMessage where
+  rnf = genericRnfV1
 
 data DeviceReply
   = StateServiceReply
@@ -341,19 +425,31 @@ data DeviceReply
   | StateLocationReply
   | StateGroupReply
   | EchoReply
-  deriving Show
+  deriving (Show, Generic)
+
+instance NFData DeviceReply where
+  rnf = genericRnfV1
 
 data LightReply
   = StateReply
   | StateInfraredReply
   | StateLightPowerReply
-  deriving Show
+  deriving (Show, Generic)
+
+instance NFData LightReply where
+  rnf = genericRnfV1
 
 data MultiZoneReply
   = StateZoneReply
   | StateMultiZoneReply
-  deriving Show
+  deriving (Show, Generic)
 
+instance NFData MultiZoneReply where
+  rnf = genericRnfV1
+
+messageTypeToWord16
+  :: MessageType
+  -> Word16
 messageTypeToWord16
  = \case
  DeviceMessageType dm ->
@@ -389,6 +485,9 @@ messageTypeToWord16
     GetColorZonesMessage -> 502
 
 -- 13 15 17 19 are unused  33
+word16ToReplyType
+  :: Word16
+  -> Either String ReplyType
 word16ToReplyType 3
   = Right $ DeviceReplyType StateServiceReply
 word16ToReplyType 22
@@ -474,7 +573,7 @@ instance Binary GetGroup where
 
 data SetPower
   = SetPower
-  { spLevel :: Word16 }
+  { spLevel :: !Word16 }
   deriving Show
 
 instance Binary SetPower where
@@ -485,7 +584,7 @@ instance Binary SetPower where
 
 data StatePower
   = StatePower
-  { stpLevel :: Word16 }
+  { stpLevel :: !Word16 }
   deriving Show
 
 instance Binary StatePower where
@@ -496,7 +595,7 @@ instance Binary StatePower where
 
 data SetLabel
   = SetLabel
-  { stlLabel :: Label }
+  { stlLabel :: !Label }
   deriving Show
 
 instance Binary SetLabel where
@@ -507,11 +606,11 @@ instance Binary SetLabel where
 
 data State
   = State
-  { sColor :: HSBK
-  , sReserved :: Int16
-  , sPower :: Word16
-  , sLabel :: Label
-  , sReserved2 :: Word64
+  { sColor :: !HSBK
+  , sReserved :: !Int16
+  , sPower :: !Word16
+  , sLabel :: !Label
+  , sReserved2 :: !Word64
   }
   deriving Show
 
@@ -545,9 +644,9 @@ instance Binary Acknowledgement where
 --                        ui|hsbk|ui
 data SetColor
   = SetColor
-  { scReserved :: ()
-  , scColor :: HSBK
-  , scDuration :: Word32 -- ms
+  { scReserved :: !()
+  , scColor :: !HSBK
+  , scDuration :: !Word32 -- ms
   }
   deriving Show
 
@@ -557,8 +656,8 @@ data GetService
 
 data StateService
   = StateService
-  { ssService :: Word8
-  , ssPort :: Word32
+  { ssService :: !Word8
+  , ssPort :: !Word32
   }
   deriving Show
 
@@ -599,30 +698,45 @@ mkPacket
   -> MessageType
   -> a
   -> Packet a
-mkPacket tag src tar ack res seq typ pay
+mkPacket tag src tar ack res sequ typ pay
   =
   let
     f = mkFrame p tag src
-    fa = mkFrameAddress tar ack res seq
+    fa = mkFrameAddress tar ack res sequ
     ph = mkProtocolHeader typ
-    p = Packet f fa ph pay
+    ~p = Packet f fa ph pay
   in
     p
 
+serviceUDP
+  :: Word8
 serviceUDP
   = 1
 
 newtype UniqueSource
   = UniqueSource { unUniqueSource :: Word32 }
-  deriving (Show, Eq)
+  deriving (Show, Eq, Generic)
+
+instance NFData UniqueSource where
+  rnf = genericRnfV1
 
 newtype Target
   = Target { unTarget :: Mac Word8 {-Word64-} }
-  deriving Show
+  deriving Generic
+
+instance Show Target where
+  show (Target t) = printMac t
+
+instance NFData Target where
+  rnf = genericRnfV1
 
 newtype Sequence
   = Sequence { unSequence :: Word8 }
-  deriving (Show, Eq)
+  deriving (Show, Eq, Generic)
+
+instance NFData Sequence where
+  rnf = genericRnfV1
+
 
 
 class WithSize a where
@@ -705,7 +819,7 @@ instance Binary UniqueSource where
   put (UniqueSource t)
     = BinP.putWord32le t
   get
-    = pure $ UniqueSource undefined
+    = UniqueSource <$> BinG.getWord32le
 
 instance Binary Sequence where
   put (Sequence t)
@@ -726,12 +840,12 @@ instance Binary Frame where
     frame2ndByte <- BinG.getWord16le
     let
       fProtocol = extract frame2ndByte 0 11
-      fOrigin = extract frame2ndByte 14 2
+      fOrigin = extract frame2ndByte 14 16
       fAddressable = boolToAddressable $ testBit frame2ndByte 12
       fTagged = boolToTagged $ testBit frame2ndByte 13
 
 
-    fSource <- UniqueSource <$> BinG.getWord32le
+    fSource <- Bin.get
     pure Frame {..}
 
 -- | Cutting out from M to N becomes a two-step process: you shift the original value M bits to the right, and then perform a bit-wise AND with the mask of N-M ones.
@@ -743,12 +857,15 @@ extract' :: (Integral a, Bits a, Integral b) => a -> Int -> Int -> (b, a)
 extract' x m n
   = (fromIntegral field, shifted)
   where
-    field = shifted .&. mask
+    field = shifted .&. bmask
     shifted = x `shiftR` m
-    mask = bit w - 1
+    bmask = bit w - 1
     w = n - m
 
 
+putFrame2ndByte
+  :: Frame
+  -> Put
 putFrame2ndByte Frame {..}
   = BinP.putWord16le $
   (fProtocol `shiftL` 0) +
@@ -757,7 +874,7 @@ putFrame2ndByte Frame {..}
   fromIntegral (fOrigin `shiftL` 14)
 
 instance Binary FrameAddress where
-  put f@FrameAddress {..}
+  put _f@FrameAddress {..}
     = do
     Bin.put faTarget
     Bin.put faReserved
@@ -773,6 +890,7 @@ instance Binary FrameAddress where
     faReserved <- Bin.get
     frameAddress15thByte <- BinG.getWord8
     let
+      _faReserved2 :: Word8
       _faReserved2 = extract frameAddress15thByte 2 7
       faReserved2 = ()
       faResRequired = boolToResRequired $ testBit frameAddress15thByte 0
@@ -790,7 +908,7 @@ instance Binary UnusedMac where
     pure $ UnusedMac $ Mac ((), (), (), (), (), ())
 
 instance Binary ProtocolHeader where
-  put p@ProtocolHeader {..}
+  put _p@ProtocolHeader {..}
     = case phType of
     Request phTypeR -> do
       BinP.putWord64le 0
@@ -811,7 +929,7 @@ instance Binary ProtocolHeader where
     pure ProtocolHeader {phReserved = 0,phReserved2 = (),..}
 
 instance Binary SetColor where
-  put sc@SetColor {..}
+  put _sc@SetColor {..}
     = do
     BinP.putWord8 0
     put scColor
@@ -822,7 +940,7 @@ instance Binary SetColor where
     = pure $ SetColor undefined undefined undefined
 
 instance Binary HSBK where
-  put hsbk@HSBK {..}
+  put _hsbk@HSBK {..}
     = do
     BinP.putWord16le hsbkHue
     BinP.putWord16le hsbkSaturation
@@ -862,10 +980,14 @@ instance Binary Header where
 
 data Header
   = Header
-  { hFrame :: Frame
-  , hFrameAddress :: FrameAddress
-  , hProtocolHeader :: ProtocolHeader
-  } deriving Show
+  { hFrame :: !Frame
+  , hFrameAddress :: !FrameAddress
+  , hProtocolHeader :: !ProtocolHeader
+  } deriving (Show, Generic)
+
+instance NFData Header where
+  rnf = genericRnfV1
+
 
 
 broadcast
@@ -879,34 +1001,40 @@ broadcast sock bcast a
   let
     enc = Bin.encode a
   in do
-    print $ "What we want to write " <> (show $ BSL16.encode enc)
+    print $ "Encoded: " <> enc
     sendManyTo sock (BSL.toChunks enc) bcast
 
 data Callback
-  = forall a. (Binary a, WithSize a) =>
+  = forall a. (Show a, Binary a, WithSize a) =>
   Callback
-  { runDecode :: Header -> BSL.ByteString -> Except PayloadDecodeError (Packet a)
-  , runCallback :: SharedState -> Packet a -> SockAddr -> IO ()
+  { runDecode :: !(Header -> BSL.ByteString -> Except PayloadDecodeError (Packet a))
+  , runCallback :: !(SharedState -> Packet a -> SockAddr -> IO ())
   }
+
+instance Show Callback where
+  show = const "Callback..."
 
 data AppState
   = AppState
-  { asSharedState :: SharedState
-  , asReceiveThread :: Async ()
-  , asDiscoveryThread :: Async ()
+  { asSharedState :: !SharedState
+  , asReceiveThread :: !(Async ())
+  , asDiscoveryThread :: !(Async ())
   }
 
 data SharedState
   = SharedState
-  { ssReplyCallbacks :: TArray Word8 Callback
-  , ssDevices :: TVar (HM.HashMap DeviceId Device)
-  , ssSocket :: Socket
-  , ssNextSeq :: IO Sequence
+  { ssReplyCallbacks :: !(TArray Word8 Callback)
+  , ssDevices :: !(TVar (HM.HashMap DeviceId Device))
+  , ssSocket :: !Socket
+  , ssNextSeq :: !(IO Sequence)
   }
 
 newtype Mac a
   = Mac { unMac :: (a, a, a, a, a, a) }
-  deriving (Show, Eq, Hashable)
+  deriving (Show, Eq, Hashable, Generic)
+
+instance NFData a => NFData (Mac a) where
+  rnf = genericRnfV1
 
 instance Functor Mac where
   fmap g (Mac (a,b,c,d,e,f)) = Mac (g a, g b, g c, g d, g e, g f)
@@ -938,52 +1066,61 @@ printMac m
 
 newtype DeviceId
   = DeviceId (Mac Word8)
-  deriving (Show, Eq, Hashable)
+  deriving (Eq, Hashable)
+
+instance Show DeviceId where
+  show (DeviceId t) = printMac t
 
 newtype DeviceAddress
   = DeviceAddress Word32
   deriving (Show, Eq)
 
 data DeviceSocketAddress
-  = DeviceSocketAddress PortNumber DeviceAddress
+  = DeviceSocketAddress !PortNumber !DeviceAddress
   deriving (Show, Eq)
 
 data Device
   = Device
-  { dAddr :: DeviceSocketAddress
-  , dDeviceId :: DeviceId
+  { dAddr :: !DeviceSocketAddress
+  , dDeviceId :: !DeviceId
   } deriving (Show, Eq)
 
 data HeaderDecodeError
   = NotAHeader
-  { hdeError :: String
-  , hdeOrig :: BSL.ByteString
-  , hdeRemaining :: BSL.ByteString
-  , hdeOffset :: BinG.ByteOffset
+  { hdeError :: !String
+  , hdeOrig :: !BSL.ByteString
+  , hdeRemaining :: !BSL.ByteString
+  , hdeOffset :: !BinG.ByteOffset
   }
   | ImproperSourceInHeader
-  { hdeHeader :: Header
-  , hdeOrig :: BSL.ByteString
-  , hdeRemaining :: BSL.ByteString
-  , hdeOffset :: BinG.ByteOffset
+  { hdeHeader :: !Header
+  , hdeOrig :: !BSL.ByteString
+  , hdeRemaining :: !BSL.ByteString
+  , hdeOffset :: !BinG.ByteOffset
   }
   | ImproperSizeInHeader
-  { hdeHeader :: Header
-  , hdeOrig :: BSL.ByteString
-  , hdeRemaining :: BSL.ByteString
-  , hdeOffset :: BinG.ByteOffset
+  { hdeHeader :: !Header
+  , hdeOrig :: !BSL.ByteString
+  , hdeRemaining :: !BSL.ByteString
+  , hdeOffset :: !BinG.ByteOffset
   }
-  deriving Show
+  deriving (Show, Generic)
+
+instance Exception HeaderDecodeError
+
+instance NFData HeaderDecodeError where
+  rnf = genericRnfV1
 
 data PayloadDecodeError
   = PayloadDecodeFailed
-  { pdeHeader :: Header
-  , pdeRemaining :: BSL.ByteString
-  , pdeRemainingAfterFail :: BSL.ByteString
-  , pdeOffsetAfterFail :: BinG.ByteOffset
-  , pdeError :: String
+  { pdeHeader :: !Header
+  , pdeRemaining :: !BSL.ByteString
+  , pdeRemainingAfterFail :: !BSL.ByteString
+  , pdeOffsetAfterFail :: !BinG.ByteOffset
+  , pdeError :: !String
   }
   deriving Show
+
 
 decodeHeader
   :: BSL.ByteString
@@ -992,15 +1129,37 @@ decodeHeader bs
   = case Bin.decodeOrFail bs of
   Left (str, offset, err) ->
     throwE $ NotAHeader err bs str offset
-  Right (rem, cons, hdr) -> do
+  Right (rema, cons, hdr) -> do
     let
       packetSize = fSize $ hFrame hdr
       packetSource = fSource $ hFrame hdr
     when (packetSize /= fromIntegral (BSL.length bs))
-      $ throwError $ ImproperSizeInHeader hdr bs rem cons
+      $ throwE $ ImproperSizeInHeader hdr bs rema cons
     when (packetSource /= uniqueSource)
-      $ throwError $ ImproperSourceInHeader hdr bs rem cons
-    pure (hdr, rem)
+      $ throwE $ ImproperSourceInHeader hdr bs rema cons
+    pure (hdr, rema)
+
+--decodeHeaderIO
+--  :: BSL.ByteString
+--  -> IO (Header, BSL.ByteString)
+--decodeHeaderIO bs
+--  =
+--  let
+--    decd = Bin.decodeOrFail bs
+--  in do
+--    print $ show decd
+--    case decd of
+--      Left (str, offset, err) ->
+--        throwIO $ NotAHeader err bs str offset
+--      Right (rema, cons, hdr) -> do
+--        let
+--          packetSize = fSize $ hFrame hdr
+--          packetSource = fSource $ hFrame hdr
+--        when (packetSize /= fromIntegral (BSL.length bs))
+--          $ throwIO $ ImproperSizeInHeader hdr bs rema cons
+--        when (packetSource /= uniqueSource)
+--          $ throwIO $ ImproperSourceInHeader hdr bs rema cons
+--        pure (hdr, rema)
 
 decodePacket
   :: ( Binary a
@@ -1009,10 +1168,10 @@ decodePacket
   => Header
   -> BSL.ByteString
   -> Except PayloadDecodeError (Packet a)
-decodePacket hdr rem
-  = case Bin.decodeOrFail rem of
+decodePacket hdr rema
+  = case Bin.decodeOrFail rema of
   Left (str, offset, err) ->
-    throwE $ PayloadDecodeFailed hdr rem str offset err
+    throwE $ PayloadDecodeFailed hdr rema str offset err
   Right (_, _, payload) ->
     pure $ packetFromHeader hdr payload
 
@@ -1025,42 +1184,69 @@ receiveThread
   :: SharedState
   -> IO (Async ())
 receiveThread ss@SharedState {..}
-  = async $ forever $ do
-  print "Receiving"
-  (bs, sa) <- recvFrom ssSocket 1500
-  let
-    headerE = runExcept $ decodeHeader (BSL.fromStrict bs)
-
-  print $ "Got Data: " <> (show $ BSL16.encode $ BSL.fromStrict bs)
-  print $ "Got Header: " <> show headerE
-  forM_ headerE $ \(header, rest) -> async $ do
-    print "Forked"
+  = do
+  logStr "Start Receive thread"
+  async $ forever $ do
+    logStr "Wanting data"
+    (!bs, sa) <- recvFrom ssSocket 1500
+    print $ "Got data: " <> (BSL.fromStrict bs)
+    print $ "From addr: " <> show sa
     let
-      Sequence seq = faSequence $ hFrameAddress header
-    cb <- atomically $ readArray ssReplyCallbacks seq
-    case cb of
-      Callback {..} -> do
-        let
-          payloadE = runExcept $ runDecode header rest
-        case payloadE of
-          Right payload ->
-            runCallback ss payload sa
-          Left e ->
-            print $ show e
-  pure ()
+      headerE = runExcept $ decodeHeader (BSL.fromStrict bs)
+    --void $ evaluate $ force headerE
+    --headerE <- try @HeaderDecodeError $ decodeHeaderIO (BSL.fromStrict bs)
+    logStr "After headerE"
+    print $ "HeaderE: " <> show headerE
 
+    case headerE of
+      Right (header, rest) -> {-async $-} do
+        let
+          Sequence sequ = faSequence $ hFrameAddress header
+        print $ "Got sequence, type " <> show sequ <> " " <> show (phType $ hProtocolHeader header)
+        cb <- atomically $ readArray ssReplyCallbacks sequ
+        print $ "Callback in array for sequence " <> show cb
+        case cb of
+          Callback {..} -> do
+            print $ "Rest of data: " <> show rest
+            print $ "Whole header: " <> show (hProtocolHeader header)
+            print $ "Whole header: " <> show (hFrameAddress header)
+            print $ "Whole header: " <> show (hFrame header)
+            print $ "Whole header: " <> show header
+            let
+              payloadE = runExcept $ runDecode header rest
+            case payloadE of
+              Right payload -> do
+                print $ "payloadE: " <> show payload
+                runCallback ss payload sa
+              Left e ->
+                print $ "ERROR " <> show e
+      Left r -> print $ "WHATTTT: " <> show r
+    logStr "After Receive"
+
+onStateService
+  :: SharedState
+  -> Packet StateService
+  -> SockAddr
+  -> IO ()
 onStateService SharedState {..} Packet {..} sa
   = do
-  let
-    incomingDevice = Device (socketAddrToDeviceSocketAddr sa) (DeviceId $ unTarget $ faTarget pFrameAddress)
-  atomically $ do
-    devs <- readTVar ssDevices
-    case dDeviceId incomingDevice `HM.lookup` devs of
-      Just l -> todo
-      Nothing -> writeTVar ssDevices $ HM.insert (dDeviceId incomingDevice) incomingDevice devs
-  where
-    StateService {..} = pPayload
-    todo = pure ()
+  logStr "Got State Service"
+  forM_ (socketAddrToDeviceSocketAddr sa) $ \sa' -> do
+    let
+      incomingDevice = Device sa' (DeviceId $ unTarget $ faTarget pFrameAddress)
+    atomically $ do
+      devs <- readTVar ssDevices
+      case dDeviceId incomingDevice `HM.lookup` devs of
+        Just _l -> todo
+        Nothing -> writeTVar ssDevices $ HM.insert (dDeviceId incomingDevice) incomingDevice devs
+    where
+      StateService {..} = pPayload
+      todo = pure ()
+
+logStr
+  :: String
+  -> IO ()
+logStr = print
 
 data FoundDevice
   = FoundDevice
@@ -1069,9 +1255,11 @@ data FoundDevice
 
 socketAddrToDeviceSocketAddr
   :: SockAddr
-  -> DeviceSocketAddress
+  -> Maybe DeviceSocketAddress
 socketAddrToDeviceSocketAddr (SockAddrInet pa ha)
-  = DeviceSocketAddress pa (DeviceAddress ha)
+  = Just $ DeviceSocketAddress pa (DeviceAddress ha)
+socketAddrToDeviceSocketAddr _
+  = Nothing
 
 discoveryThread
   :: SharedState
@@ -1079,9 +1267,10 @@ discoveryThread
   -> IO (Async ())
 discoveryThread ss@SharedState {..} bcast
   = async $ forever $ do
-  print "Discovering"
   nextSeq <- ssNextSeq
-  runExceptT $ setCallbackForSeq ss nextSeq $ Callback decodePacket onStateService
+  print $ "Discovering Sequence: " <> show nextSeq
+  res <- setCallbackForSeq ss nextSeq $ Callback decodePacket onStateService
+  print $ "Do we die?" <> show res
   broadcast
     ssSocket
     bcast
@@ -1094,24 +1283,23 @@ discoveryThread ss@SharedState {..} bcast
         nextSeq
         (DeviceMessageType GetServiceMessage)
         GetService
-  threadDelay $ 3 * 1000000
+  threadDelay $ 10 * 1000000
 
 setCallbackForSeq
-  :: ( MonadError e m
-     , MonadIO m
-     )
+  :: ( MonadIO m )
   => SharedState
   -> Sequence
   -> Callback
   -> m ()
-setCallbackForSeq SharedState {..} seq cont
+setCallbackForSeq SharedState {..} sequ cont
   = liftIO
   $ atomically
-  $ writeArray ssReplyCallbacks (unSequence seq) cont
+  $ writeArray ssReplyCallbacks (unSequence sequ) cont
 
 mkState
   :: IO AppState
 mkState = do
+  print =<< getNumCapabilities
   nSeq <- newTVarIO (Sequence 0)
   ssNextSeq <- pure $ atomically $ do
     val@(Sequence inner) <- readTVar nSeq
@@ -1120,7 +1308,7 @@ mkState = do
 
   ifaces <- (HM.fromList . fmap (NI.name &&& id)) <$> NI.getNetworkInterfaces
   let
-    net@(NI.IPv4 hostAddr) = case HM.lookup "eth0" ifaces of
+    _net@(NI.IPv4 _hostAddr) = case HM.lookup "eth0" ifaces of
       Just iface -> NI.ipv4 iface
       Nothing -> undefined
 
