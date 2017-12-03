@@ -53,6 +53,7 @@ import            Data.Binary                   ( Binary (..)
                                                 )
 import            Data.Bits                     ( zeroBits
                                                 , Bits(..)
+                                                , FiniteBits(..)
                                                 , bit
                                                 , shiftR
                                                 , shiftL
@@ -789,7 +790,7 @@ targetToWord64 (Target (Mac t))
   let
     (b1, b2, b3, b4, b5, b6) = t
 
-    r8 = fromIntegral b6 `shiftL` 48
+    r8 = fromIntegral b6 `shiftL` 40
     r7 = fromIntegral b5 `shiftL` 32
     r6 = fromIntegral b4 `shiftL` 24
     r5 = fromIntegral b3 `shiftL` 16
@@ -804,14 +805,27 @@ word64ToTarget
 word64ToTarget n
   =
   let
-    b6 = extract n 40 48
-    b5 = extract n 32 40
-    b4 = extract n 24 32
-    b3 = extract n 16 24
-    b2 = extract n 8 16
-    b1 = extract n 0 8
+    b6 = extractByte n 5
+    b5 = extractByte n 4
+    b4 = extractByte n 3
+    b3 = extractByte n 2
+    b2 = extractByte n 1
+    b1 = extractByte n 0
   in
     Target $ Mac (b1, b2, b3, b4, b5, b6)
+
+extractByte
+  :: ( Bits a
+     , Integral a
+     , Integral b
+     )
+  => a
+  -> Int
+  -> b
+extractByte x t
+  = fromIntegral $ (x .&. (0xFF `shiftL` tt)) `shiftR` tt
+  where
+    tt = t * 8
 
 instance Binary UniqueSource where
   put (UniqueSource t)
