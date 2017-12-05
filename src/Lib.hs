@@ -124,16 +124,22 @@ newtype Word64le
   deriving newtype (Num, Real, Enum, Integral, Show, Read, Eq, Ord, Bits, NFData)
 
 instance Binary Word16le where
-  put = BinP.putWord16le . unWord16le
-  get = Word16le <$> BinG.getWord16le
+  put
+    = BinP.putWord16le . unWord16le
+  get
+    = Word16le <$> BinG.getWord16le
 
 instance Binary Word32le where
-  put = BinP.putWord32le . unWord32le
-  get = Word32le <$> BinG.getWord32le
+  put
+    = BinP.putWord32le . unWord32le
+  get
+    = Word32le <$> BinG.getWord32le
 
 instance Binary Word64le where
-  put = BinP.putWord64le . unWord64le
-  get = Word64le <$> BinG.getWord64le
+  put
+    = BinP.putWord64le . unWord64le
+  get
+    = Word64le <$> BinG.getWord64le
 
 
 newtype Int16le
@@ -149,16 +155,22 @@ newtype Int64le
   deriving newtype (Num, Real, Enum, Integral, Show, Read, Eq, Ord, Bits, NFData)
 
 instance Binary Int16le where
-  put = BinP.putInt16le . unInt16le
-  get = Int16le <$> BinG.getInt16le
+  put
+    = BinP.putInt16le . unInt16le
+  get
+    = Int16le <$> BinG.getInt16le
 
 instance Binary Int32le where
-  put = BinP.putInt32le . unInt32le
-  get = Int32le <$> BinG.getInt32le
+  put
+    = BinP.putInt32le . unInt32le
+  get
+    = Int32le <$> BinG.getInt32le
 
 instance Binary Int64le where
-  put = BinP.putInt64le . unInt64le
-  get = Int64le <$> BinG.getInt64le
+  put
+    = BinP.putInt64le . unInt64le
+  get
+    = Int64le <$> BinG.getInt64le
 
 data Tagged
   = SingleTagged -- Encodes as 0, means FrameAddress `target` must be a MAC
@@ -166,7 +178,8 @@ data Tagged
   deriving (Show, Generic)
 
 instance NFData Tagged where
-  rnf = genericRnfV1
+  rnf
+    = genericRnfV1
 
 
 data Addressable
@@ -175,7 +188,8 @@ data Addressable
   deriving (Show, Generic)
 
 instance NFData Addressable where
-  rnf = genericRnfV1
+  rnf
+    = genericRnfV1
 
 data AckRequired
   = NoAckRequired
@@ -183,7 +197,8 @@ data AckRequired
   deriving (Show, Generic)
 
 instance NFData AckRequired where
-  rnf = genericRnfV1
+  rnf
+    = genericRnfV1
 
 data ResRequired
   = NoResRequired
@@ -191,7 +206,8 @@ data ResRequired
   deriving (Show, Generic)
 
 instance NFData ResRequired where
-  rnf = genericRnfV1
+  rnf
+    = genericRnfV1
 
 
 data Reserved (d :: Symbol) a
@@ -264,15 +280,6 @@ boolToResRequired False
 boolToResRequired True
   = ResRequired
 
---data Command
---  = C
---
---data CommandEntry a
---  = CommandEntry
---  { cAct :: Command
---  , cRes :: TMVar a
---  }
-
 data DeviceIdentifier
   = IdMac
   | IdIp
@@ -283,25 +290,8 @@ listCached
   :: SharedState
   -> IO [Device]
 listCached SharedState {..}
-  = do
-  HM.elems <$> (atomically $ readTVar ssDevices)
+  = HM.elems <$> (atomically $ readTVar ssDevices)
 
---listALight identifier
---  = do
-  -- Make a get packet
-  -- make a result var
-  -- async issue request
-  -- -- which might issue more requests
-  -- when all fullfilled fill result var
-  -- return result var
-  --
-
-  
---newtype CommandQueue
---  = CommandQueue TQueue
--- Little endian
---
---
 -- Layout in bits:   16|2|1|1|12|32
 --                   ui|ui|b|b|ui|ui
 data Frame
@@ -316,7 +306,8 @@ data Frame
   deriving (Show, Generic)
 
 instance NFData Frame where
-  rnf = genericRnfV1
+  rnf
+    = genericRnfV1
 
 
 -- Layout in bits:   64|48|6|1|1|8
@@ -334,7 +325,8 @@ data FrameAddress
   deriving (Show, Generic)
 
 instance NFData FrameAddress where
-  rnf = genericRnfV1
+  rnf
+    = genericRnfV1
 
 
 newtype UnusedMac
@@ -342,7 +334,8 @@ newtype UnusedMac
   deriving (Show, Generic)
 
 instance NFData UnusedMac where
-  rnf = genericRnfV1
+  rnf
+    = genericRnfV1
 
 -- Layout in bits:   64|16|16
 --                   ui|ui|r
@@ -355,7 +348,8 @@ data ProtocolHeader
   deriving (Show, Generic)
 
 instance NFData ProtocolHeader where
-  rnf = genericRnfV1
+  rnf
+    = genericRnfV1
 
 
 data Packet a
@@ -378,9 +372,6 @@ data HSBK
   }
   deriving Show
 
-data Get
-  = Get
-
 -- | 32 bytes
 newtype Label
   = Label { unLabel :: TL.Text }
@@ -398,7 +389,8 @@ data Direction
   deriving (Show, Generic)
 
 instance NFData Direction where
-  rnf = genericRnfV1
+  rnf
+    = genericRnfV1
 
 
 data MessageType
@@ -408,7 +400,8 @@ data MessageType
   deriving (Show, Generic)
 
 instance NFData MessageType where
-  rnf = genericRnfV1
+  rnf
+    = genericRnfV1
 
 
 data ReplyType
@@ -418,7 +411,8 @@ data ReplyType
   deriving (Show, Generic)
 
 instance NFData ReplyType where
-  rnf = genericRnfV1
+  rnf
+    = genericRnfV1
 
 
 data DeviceMessage
@@ -441,7 +435,8 @@ data DeviceMessage
   deriving (Show, Generic)
 
 instance NFData DeviceMessage where
-  rnf = genericRnfV1
+  rnf
+    = genericRnfV1
 
 data LightMessage
   = GetLightMessage
@@ -455,7 +450,8 @@ data LightMessage
   deriving (Show, Generic)
 
 instance NFData LightMessage where
-  rnf = genericRnfV1
+  rnf
+    = genericRnfV1
 
 
 data MultiZoneMessage
@@ -464,7 +460,8 @@ data MultiZoneMessage
   deriving (Show, Generic)
 
 instance NFData MultiZoneMessage where
-  rnf = genericRnfV1
+  rnf
+    = genericRnfV1
 
 data DeviceReply
   = StateServiceReply
@@ -483,7 +480,8 @@ data DeviceReply
   deriving (Show, Generic)
 
 instance NFData DeviceReply where
-  rnf = genericRnfV1
+  rnf
+    = genericRnfV1
 
 data LightReply
   = StateReply
@@ -492,7 +490,8 @@ data LightReply
   deriving (Show, Generic)
 
 instance NFData LightReply where
-  rnf = genericRnfV1
+  rnf
+    = genericRnfV1
 
 data MultiZoneReply
   = StateZoneReply
@@ -500,7 +499,8 @@ data MultiZoneReply
   deriving (Show, Generic)
 
 instance NFData MultiZoneReply where
-  rnf = genericRnfV1
+  rnf
+    = genericRnfV1
 
 messageTypeToWord16le
   :: MessageType
@@ -599,8 +599,10 @@ newtype ByteId16
   deriving Show
 
 instance Binary ByteId16 where
-  put = Bin.put . unByte16
-  get = do
+  put
+    = Bin.put . unByte16
+  get
+    = do
     unByte16 <- sequence $ replicate 16 $ BinG.getWord8
     pure $ ByteId16 {..}
 
@@ -636,8 +638,10 @@ newtype LifxUTC
   deriving Show
 
 instance Binary LifxUTC where
-  put = Bin.put . unLifxUTC
-  get = LifxUTC <$> Bin.get
+  put
+    = Bin.put . unLifxUTC
+  get
+    = LifxUTC <$> Bin.get
 
 data StateLocation
   = StateLocation
@@ -648,22 +652,26 @@ data StateLocation
   deriving Show
 
 instance Binary StateLocation where
-  put StateLocation {..} = do
+  put StateLocation {..}
+    = do
     Bin.put stlLocation
     Bin.put stlLabel
     Bin.put stlUpdatedAt
 
-  get = do
+  get
+    = do
     stlLocation <- Bin.get
     stlLabel <- Bin.get
     stlUpdatedAt <- Bin.get
     pure $ StateLocation {..}
 
 instance WithSize StateLocation where
-  size = const 392
+  size
+    = const 392
 
 instance WithSize GetLocation where
-  size = const 0
+  size
+    = const 0
 
 
 
@@ -701,20 +709,24 @@ data StateLightPower
   deriving Show
 
 instance Binary StateLightPower where
-  put StateLightPower {..} = do
+  put StateLightPower {..}
+    = do
     Bin.put stlpLevel
     Bin.put stlpDuration
 
-  get = do
+  get
+    = do
     stlpLevel <- Bin.get
     stlpDuration <- Bin.get
     pure $ StateLightPower {..}
 
 instance WithSize StateLightPower where
-  size = const 48
+  size
+    = const 48
 
 instance WithSize GetLightPower where
-  size = const 0
+  size
+    = const 0
 
 data GetLight
   = GetLight
@@ -747,18 +759,22 @@ newtype LightPower
   deriving Show
 
 instance Binary LightPower where
-  put = Bin.put . unLightPower
-  get = LightPower <$> Bin.get
+  put
+    = Bin.put . unLightPower
+  get
+    = LightPower <$> Bin.get
 
 instance Binary StateLight where
-  put StateLight {..} = do
+  put StateLight {..}
+    = do
     Bin.put stliColor
     BinP.putInt16le stliReserved
     Bin.put stliPower
     Bin.put stliLabel
     Bin.put stliReserved2
 
-  get = do
+  get
+    = do
     stliColor <- Bin.get
     stliReserved <- BinG.getInt16le
     stliPower <- Bin.get
@@ -767,10 +783,12 @@ instance Binary StateLight where
     pure $ StateLight {..}
 
 instance WithSize StateLight where
-  size = const $ size (undefined :: HSBK) + 42
+  size
+    = const $ size (undefined :: HSBK) + 42
 
 instance WithSize GetLight where
-  size = const 0
+  size
+    = const 0
 
 
 data GetLabel
@@ -796,16 +814,20 @@ newtype StateLabel
   deriving Show
 
 instance Binary StateLabel where
-  put = Bin.put . stlaLabel
-  get = do
+  put
+    = Bin.put . stlaLabel
+  get
+    = do
     stlaLabel <- Bin.get
     pure $ StateLabel {..}
 
 instance WithSize StateLabel where
-  size = const 256
+  size
+    = const 256
 
 instance WithSize GetLabel where
-  size = const 0
+  size
+    = const 0
 
 data GetInfo
   = GetInfo
@@ -853,10 +875,12 @@ instance Binary StateGroup where
     pure $ StateGroup {..}
 
 instance WithSize StateGroup where
-  size = const 392
+  size
+    = const 392
 
 instance WithSize GetGroup where
-  size = const 0
+  size
+    = const 0
 
 data SetPower
   = SetPower
@@ -997,7 +1021,7 @@ mkPacket tag src tar ack res sequ typ pay
     f = mkFrame p tag src
     fa = mkFrameAddress tar ack res sequ
     ph = mkProtocolHeader typ
-    ~p = Packet f fa ph pay
+    p = Packet f fa ph pay
   in
     p
 
@@ -1011,24 +1035,28 @@ newtype UniqueSource
   deriving (Show, Eq, Generic)
 
 instance NFData UniqueSource where
-  rnf = genericRnfV1
+  rnf
+    = genericRnfV1
 
 newtype Target
   = Target { unTarget :: Mac Word8 {-Word64-} }
   deriving Generic
 
 instance Show Target where
-  show (Target t) = printMac t
+  show (Target t)
+    = printMac t
 
 instance NFData Target where
-  rnf = genericRnfV1
+  rnf
+    = genericRnfV1
 
 newtype Sequence
   = Sequence { unSequence :: Word8 }
   deriving (Show, Eq, Generic)
 
 instance NFData Sequence where
-  rnf = genericRnfV1
+  rnf
+    = genericRnfV1
 
 
 
@@ -1153,11 +1181,27 @@ instance Binary Frame where
     pure Frame {..}
 
 -- | Cutting out from M to N becomes a two-step process: you shift the original value M bits to the right, and then perform a bit-wise AND with the mask of N-M ones.
-extract :: (Integral a, Bits a, Integral b) => a -> Int -> Int -> b
+extract
+  :: ( Integral a
+     , Bits a
+     , Integral b
+     )
+  => a
+  -> Int
+  -> Int
+  -> b
 extract x m n
   = fst $ extract' x m n
 
-extract' :: (Integral a, Bits a, Integral b) => a -> Int -> Int -> (b, a)
+extract'
+  :: ( Integral a
+     , Bits a
+     , Integral b
+     )
+  => a
+  -> Int
+  -> Int
+  -> (b, a)
 extract' x m n
   = (fromIntegral field, shifted)
   where
@@ -1321,10 +1365,12 @@ data Header
   { hFrame :: !Frame
   , hFrameAddress :: !FrameAddress
   , hProtocolHeader :: !ProtocolHeader
-  } deriving (Show, Generic)
+  }
+  deriving (Show, Generic)
 
 instance NFData Header where
-  rnf = genericRnfV1
+  rnf
+    = genericRnfV1
 
 
 
@@ -1352,7 +1398,8 @@ type Callback a
   = (SharedState -> Packet a -> SockAddr -> BSL.ByteString -> IO ())
 
 instance Show CallbackWrap where
-  show = const "Callback..."
+  show
+    = const "Callback..."
 
 data AppState
   = AppState
@@ -1384,10 +1431,12 @@ newtype Mac a
   deriving (Show, Eq, Hashable, Generic)
 
 instance NFData a => NFData (Mac a) where
-  rnf = genericRnfV1
+  rnf
+    = genericRnfV1
 
 instance Functor Mac where
-  fmap g (Mac (a,b,c,d,e,f)) = Mac (g a, g b, g c, g d, g e, g f)
+  fmap g (Mac (a,b,c,d,e,f))
+    = Mac (g a, g b, g c, g d, g e, g f)
 
 printMac
   :: ( Num a
@@ -1419,12 +1468,14 @@ newtype DeviceId
   deriving (Eq, Hashable)
 
 instance Show DeviceId where
-  show (DeviceId t) = printMac t
+  show (DeviceId t)
+    = printMac t
 
 deviceIdToTarget
   :: DeviceId
   -> Target
-deviceIdToTarget (DeviceId m) = Target m
+deviceIdToTarget (DeviceId m)
+  = Target m
 
 newtype DeviceAddress
   = DeviceAddress Word32le
@@ -1442,7 +1493,8 @@ data Device
   = Device
   { dAddr :: !DeviceSocketAddress
   , dDeviceId :: !DeviceId
-  } deriving (Show, Eq)
+  }
+  deriving (Show, Eq)
 
 data HeaderDecodeError
   = NotAHeader
@@ -1468,7 +1520,8 @@ data HeaderDecodeError
 instance Exception HeaderDecodeError
 
 instance NFData HeaderDecodeError where
-  rnf = genericRnfV1
+  rnf
+    = genericRnfV1
 
 data PayloadDecodeError
   = PayloadDecodeFailed
@@ -1584,7 +1637,8 @@ getLocation'
   :: SharedState
   -> Device
   -> IO ()
-getLocation' ss d = do
+getLocation' ss d
+  = do
   outerGet ss d $ \_ p@(Packet {..}) _ _ -> do
     let
       StateLocation {..} = pPayload
@@ -1594,41 +1648,41 @@ getGroup'
   :: SharedState
   -> Device
   -> IO ()
-getGroup' ss d =
-  outerGet ss d $ \_ p@(Packet {..}) _ _ -> do
-    let
-      StateGroup {..} = pPayload
-    print $ show p
+getGroup' ss d
+  = outerGet ss d $ \_ p@(Packet {..}) _ _ -> do
+  let
+    StateGroup {..} = pPayload
+  print $ show p
 
 getLabel'
   :: SharedState
   -> Device
   -> IO ()
-getLabel' ss d =
-  outerGet ss d $ \_ p@(Packet {..}) _ _ -> do
-    let
-      StateLabel {..} = pPayload
-    print $ show p
+getLabel' ss d
+  = outerGet ss d $ \_ p@(Packet {..}) _ _ -> do
+  let
+    StateLabel {..} = pPayload
+  print $ show p
 
 getLightPower'
   :: SharedState
   -> Device
   -> IO ()
-getLightPower' ss d =
-  outerGet ss d $ \_ p@(Packet {..}) _ _ -> do
-    let
-      StateLightPower {..} = pPayload
-    print $ show p
+getLightPower' ss d
+  = outerGet ss d $ \_ p@(Packet {..}) _ _ -> do
+  let
+    StateLightPower {..} = pPayload
+  print $ show p
 
 getLight'
   :: SharedState
   -> Device
   -> IO ()
-getLight' ss d =
-  outerGet ss d $ \_ p@(Packet {..}) _ _ -> do
-    let
-      StateLight {..} = pPayload
-    print $ show p
+getLight' ss d
+  = outerGet ss d $ \_ p@(Packet {..}) _ _ -> do
+  let
+    StateLight {..} = pPayload
+  print $ show p
 
 outerGet
   :: forall get
@@ -1645,70 +1699,11 @@ outerGet ss d cb
     np = fp { pFrameAddress = (pFrameAddress fp) { faTarget = deviceIdToTarget $ dDeviceId d} }
   sendToDevice ss d np
 
---getLocation
---  :: SharedState
---  -> Device
---  -> Callback StateLocation
---  -> IO ()
---getLocation ss d cb = do
---  p <- newPacket ss cb
---  let
---    fp = p GetLocation
---    np = fp { pFrameAddress = (pFrameAddress fp) { faTarget = deviceIdToTarget $ dDeviceId d} }
---  sendToDevice ss d np
---
---getGroup
---  :: SharedState
---  -> Device
---  -> Callback StateGroup
---  -> IO ()
---getGroup ss d cb = do
---  p <- newPacket ss cb
---  let
---    fp = p GetGroup
---    np = fp { pFrameAddress = (pFrameAddress fp) { faTarget = deviceIdToTarget $ dDeviceId d} }
---  sendToDevice ss d np
---
---getLabel
---  :: SharedState
---  -> Device
---  -> Callback StateLabel
---  -> IO ()
---getLabel ss d cb = do
---  p <- newPacket ss cb
---  let
---    fp = p GetLabel
---    np = fp { pFrameAddress = (pFrameAddress fp) { faTarget = deviceIdToTarget $ dDeviceId d} }
---  sendToDevice ss d np
---
---getLightPower
---  :: SharedState
---  -> Device
---  -> Callback StateLightPower
---  -> IO ()
---getLightPower ss d cb = do
---  p <- newPacket ss cb
---  let
---    fp = p GetLightPower
---    np = fp { pFrameAddress = (pFrameAddress fp) { faTarget = deviceIdToTarget $ dDeviceId d} }
---  sendToDevice ss d np
---
---getLight
---  :: SharedState
---  -> Device
---  -> Callback StateLight
---  -> IO ()
---getLight ss d cb = do
---  p <- newPacket ss cb
---  let
---    fp = p GetLight
---    np = fp { pFrameAddress = (pFrameAddress fp) { faTarget = deviceIdToTarget $ dDeviceId d} }
---  sendToDevice ss d np
-
 logStr
   :: String
   -> IO ()
-logStr = print
+logStr
+  = print
 
 data FoundDevice
   = FoundDevice
@@ -1759,8 +1754,6 @@ discoveryThread
   -> IO (Async ())
 discoveryThread ss@SharedState {..} bcast
   = async $ forever $ do
-  --nextSeq <- ssNextSeq
-  --setCallbackForSeq ss nextSeq $ Callback decodePacket onStateService
   gsp <- newPacket ss onStateService
   broadcast
     ssSocket
@@ -1781,7 +1774,8 @@ setCallbackForSeq SharedState {..} sequ cont
 
 mkState
   :: IO AppState
-mkState = do
+mkState
+  = do
   print =<< getNumCapabilities
   nSeq <- newTVarIO (Sequence 0)
   ssNextSeq <- pure $ atomically $ do
