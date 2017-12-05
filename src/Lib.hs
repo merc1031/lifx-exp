@@ -288,7 +288,7 @@ data DeviceIdentifier
 
 listCached
   :: SharedState
-  -> IO [Device]
+  -> IO [Light]
 listCached SharedState {..}
   = HM.elems <$> (atomically $ readTVar ssDevices)
 
@@ -370,12 +370,12 @@ data HSBK
   , hsbkBrightness :: !Word16le -- 0-65535
   , hsbkKelvin :: !Word16le --2500-9000
   }
-  deriving Show
+  deriving (Show, Eq)
 
 -- | 32 bytes
 newtype Label
   = Label { unLabel :: TL.Text }
-  deriving Show
+  deriving (Show, Eq)
 
 instance Binary Label where
   put
@@ -596,7 +596,7 @@ class MessageId a where
 
 newtype ByteId16
   = ByteId16 { unByte16 :: [Word8] }
-  deriving Show
+  deriving (Show, Eq)
 
 instance Binary ByteId16 where
   put
@@ -608,12 +608,12 @@ instance Binary ByteId16 where
 
 newtype LocationId
   = LocationId { unLocationId :: ByteId16 }
-  deriving Show
+  deriving (Show, Eq)
   deriving newtype Binary
 
 newtype GroupId
   = GroupId { unGroupId :: ByteId16 }
-  deriving Show
+  deriving (Show, Eq)
   deriving newtype Binary
 
 
@@ -756,7 +756,7 @@ data StateLight
 
 newtype LightPower
   = LightPower { unLightPower :: Word16le }
-  deriving Show
+  deriving (Show, Eq)
 
 instance Binary LightPower where
   put
@@ -1411,7 +1411,7 @@ data AppState
 data SharedState
   = SharedState
   { ssReplyCallbacks :: !(TArray Word8 CallbackWrap)
-  , ssDevices :: !(TVar (HM.HashMap DeviceId Device))
+  , ssDevices :: !(TVar (HM.HashMap DeviceId Light))
   , ssSocket :: !Socket
   , ssNextSeq :: !(IO Sequence)
   }
@@ -1419,12 +1419,13 @@ data SharedState
 data Light
   = Light
   { lDevice :: Device
-  , lGroup :: GroupId
-  , lLocation :: LocationId
-  , lLabel :: Label
-  , lColor :: HSBK
-  , lPower :: LightPower
+  , lGroup :: Maybe GroupId
+  , lLocation :: Maybe LocationId
+  , lLabel :: Maybe Label
+  , lColor :: Maybe HSBK
+  , lPower :: Maybe LightPower
   }
+  deriving (Show, Eq)
 
 newtype Mac a
   = Mac { unMac :: (a, a, a, a, a, a) }
@@ -1575,7 +1576,9 @@ receiveThread
   -> IO (Async ())
 receiveThread ss@SharedState {..}
   = async $ forever $ do
+  logStr "About to recv"
   (!bs, sa) <- recvFrom ssSocket 1500
+  print $  "Recvd: " <> show bs
   let
     bsl = BSL.fromStrict bs
     headerE = runExcept $ decodeHeader bsl
@@ -1607,13 +1610,13 @@ onStateService ss@(SharedState {..}) Packet {..} sa _orig
       devs <- readTVar ssDevices
       case dDeviceId incomingDevice `HM.lookup` devs of
         Just l ->
-          if (l /= incomingDevice && False)
+          if (lDevice l /= incomingDevice && False)
           then do
-            writeTVar ssDevices $ HM.insert (dDeviceId incomingDevice) incomingDevice devs
+            --writeTVar ssDevices $ HM.insert (dDeviceId incomingDevice) (Light incomingDevice Nothing Nothing Nothing Nothing Nothing) devs
             pure $ map (flip uncurry (ss, incomingDevice)) [getLocation', getGroup', getLabel', getLightPower', getLight']
           else pure []
         Nothing -> do
-          writeTVar ssDevices $ HM.insert (dDeviceId incomingDevice) incomingDevice devs
+          writeTVar ssDevices $ HM.insert (dDeviceId incomingDevice) (Light incomingDevice Nothing Nothing Nothing Nothing Nothing) devs
           pure $ map (flip uncurry (ss, incomingDevice)) [getLocation', getGroup', getLabel', getLightPower', getLight']
 
     sequence_ moreInfo
@@ -1632,6 +1635,16 @@ sendToDevice SharedState {..} Device {..} packet
   where
     DeviceSocketAddress p (DeviceAddress (unWord32le -> w)) = dAddr
     bytes = Bin.encode packet
+
+updateLocation
+  :: SharedState
+  -> Device
+  -> StateLocation
+  -> IO ()
+updateLocation SharedState {..} Device {..} StateLocation {..}
+  = do
+  pure ()
+
 
 getLocation'
   :: SharedState
@@ -1828,3 +1841,50 @@ packetFromHeader
   -> Packet a
 packetFromHeader Header {..} payload
   = Packet hFrame hFrameAddress hProtocolHeader payload
+
+mkTestFrame
+  :: WithSize a
+  => Packet a
+  -> Tagged
+  -> UniqueSource
+  -> Frame
+mkTestFrame par tag
+  = Frame (size par) 0 tag HasFrameAddress 1024
+
+mkTestFrameAddress
+  :: Target
+  -> AckRequired
+  -> ResRequired
+  -> Sequence
+  -> FrameAddress
+mkTestFrameAddress tar
+  = FrameAddress tar (UnusedMac $ Mac ((), (), (), (), (), ())) ()
+
+mkTestProtocolHeader
+  :: Direction
+  -> ProtocolHeader
+mkTestProtocolHeader typ
+  = ProtocolHeader 0 typ ()
+
+mkTestPacket
+  :: ( WithSize a
+     , Binary a
+     )
+  => Tagged
+  -> UniqueSource
+  -> Target
+  -> AckRequired
+  -> ResRequired
+  -> Sequence
+  -> Direction
+  -> a
+  -> Packet a
+mkTestPacket tag src tar ack res sequ typ pay
+  =
+  let
+    f = mkTestFrame p tag src
+    fa = mkTestFrameAddress tar ack res sequ
+    ph = mkTestProtocolHeader typ
+    p = Packet f fa ph pay
+  in
+    p
