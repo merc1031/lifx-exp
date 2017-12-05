@@ -111,6 +111,55 @@ import qualified  Data.Text.Lazy.Encoding       as TLE
 import qualified  Network.Info                  as NI
 
 
+newtype Word16le
+  = Word16le { unWord16le :: Word16 }
+  deriving newtype (Num, Real, Enum, Integral, Show, Read, Eq, Ord, Bits, NFData)
+
+newtype Word32le
+  = Word32le { unWord32le :: Word32 }
+  deriving newtype (Num, Real, Enum, Integral, Show, Read, Eq, Ord, Bits, NFData)
+
+newtype Word64le
+  = Word64le { unWord64le :: Word64 }
+  deriving newtype (Num, Real, Enum, Integral, Show, Read, Eq, Ord, Bits, NFData)
+
+instance Binary Word16le where
+  put = BinP.putWord16le . unWord16le
+  get = Word16le <$> BinG.getWord16le
+
+instance Binary Word32le where
+  put = BinP.putWord32le . unWord32le
+  get = Word32le <$> BinG.getWord32le
+
+instance Binary Word64le where
+  put = BinP.putWord64le . unWord64le
+  get = Word64le <$> BinG.getWord64le
+
+
+newtype Int16le
+  = Int16le { unInt16le :: Int16 }
+  deriving newtype (Num, Real, Enum, Integral, Show, Read, Eq, Ord, Bits, NFData)
+
+newtype Int32le
+  = Int32le { unInt32le :: Int32 }
+  deriving newtype (Num, Real, Enum, Integral, Show, Read, Eq, Ord, Bits, NFData)
+
+newtype Int64le
+  = Int64le { unInt64le :: Int64 }
+  deriving newtype (Num, Real, Enum, Integral, Show, Read, Eq, Ord, Bits, NFData)
+
+instance Binary Int16le where
+  put = BinP.putInt16le . unInt16le
+  get = Int16le <$> BinG.getInt16le
+
+instance Binary Int32le where
+  put = BinP.putInt32le . unInt32le
+  get = Int32le <$> BinG.getInt32le
+
+instance Binary Int64le where
+  put = BinP.putInt64le . unInt64le
+  get = Int64le <$> BinG.getInt64le
+
 data Tagged
   = SingleTagged -- Encodes as 0, means FrameAddress `target` must be a MAC
   | AllTagged -- Encodes as 1, means FrameAddress must be 0 and will be sent to all lights
@@ -257,11 +306,11 @@ listCached SharedState {..}
 --                   ui|ui|b|b|ui|ui
 data Frame
   = Frame
-  { fSize :: !Word16
+  { fSize :: !Word16le
   , fOrigin :: !Word8 -- 0
   , fTagged :: !Tagged
   , fAddressable :: !Addressable -- 1
-  , fProtocol :: !Word16 -- 1024
+  , fProtocol :: !Word16le -- 1024
   , fSource :: !UniqueSource
   }
   deriving (Show, Generic)
@@ -299,7 +348,7 @@ instance NFData UnusedMac where
 --                   ui|ui|r
 data ProtocolHeader
   = ProtocolHeader
-  { phReserved :: !Word64
+  { phReserved :: !Word64le
   , phType :: !Direction
   , phReserved2 :: !()
   }
@@ -322,10 +371,10 @@ data Packet a
 --                   ui|ui|ui|ui
 data HSBK
   = HSBK
-  { hsbkHue :: !Word16 -- 0-65535
-  , hsbkSaturation :: !Word16 -- 0-65535
-  , hsbkBrightness :: !Word16 -- 0-65535
-  , hsbkKelvin :: !Word16 --2500-9000
+  { hsbkHue :: !Word16le -- 0-65535
+  , hsbkSaturation :: !Word16le -- 0-65535
+  , hsbkBrightness :: !Word16le -- 0-65535
+  , hsbkKelvin :: !Word16le --2500-9000
   }
   deriving Show
 
@@ -453,19 +502,19 @@ data MultiZoneReply
 instance NFData MultiZoneReply where
   rnf = genericRnfV1
 
-messageTypeToWord16
+messageTypeToWord16le
   :: MessageType
-  -> Word16
-messageTypeToWord16
+  -> Word16le
+messageTypeToWord16le
  = \case
  DeviceMessageType dm ->
-   deviceMessageTypeToWord16 dm
+   deviceMessageTypeToWord16le dm
  LightMessageType lm ->
-   lightMessageTypeToWord16 lm
+   lightMessageTypeToWord16le lm
  MultiZoneMessageType mzm ->
-   multiZoneMessageTypeToWord16 mzm
+   multiZoneMessageTypeToWord16le mzm
  where
-  deviceMessageTypeToWord16 = \case
+  deviceMessageTypeToWord16le = \case
     GetServiceMessage -> 2
     GetPowerMessage -> 20
     SetPowerMessage -> 21
@@ -477,7 +526,7 @@ messageTypeToWord16
     GetGroupMessage -> 51
     SetGroupMessage -> 52
     EchoMessage -> 58
-  lightMessageTypeToWord16 = \case
+  lightMessageTypeToWord16le = \case
     GetLightMessage -> 101
     SetColorMessage -> 102
     SetWaveformMessage -> 103
@@ -486,44 +535,44 @@ messageTypeToWord16
     SetLightPowerMessage -> 117
     GetInfraredMessage -> 121
     SetInfraredMessage -> 122
-  multiZoneMessageTypeToWord16 = \case
+  multiZoneMessageTypeToWord16le = \case
     SetColorZonesMessage -> 501
     GetColorZonesMessage -> 502
 
 -- 13 15 17 19 are unused  33
-word16ToReplyType
-  :: Word16
+word16leToReplyType
+  :: Word16le
   -> Either String ReplyType
-word16ToReplyType 3
+word16leToReplyType 3
   = Right $ DeviceReplyType StateServiceReply
-word16ToReplyType 22
+word16leToReplyType 22
   = Right $ DeviceReplyType StatePowerReply
-word16ToReplyType 25
+word16leToReplyType 25
   = Right $ DeviceReplyType StateLabelReply
-word16ToReplyType 35
+word16leToReplyType 35
   = Right $ DeviceReplyType StateInfoReply
-word16ToReplyType 45
+word16leToReplyType 45
   = Right $ DeviceReplyType AcknowledgementReply
-word16ToReplyType 50
+word16leToReplyType 50
   = Right $ DeviceReplyType StateLocationReply
-word16ToReplyType 53
+word16leToReplyType 53
   = Right $ DeviceReplyType StateGroupReply
-word16ToReplyType 59
+word16leToReplyType 59
   = Right $ DeviceReplyType EchoReply
 
-word16ToReplyType 107
+word16leToReplyType 107
   = Right $ LightReplyType StateReply
-word16ToReplyType 118
+word16leToReplyType 118
   = Right $ LightReplyType StateLightPowerReply
-word16ToReplyType 121
+word16leToReplyType 121
   = Right $ LightReplyType StateInfraredReply
 
-word16ToReplyType 503
+word16leToReplyType 503
   = Right $ MultiZoneReplyType StateZoneReply
-word16ToReplyType 506
+word16leToReplyType 506
   = Right $ MultiZoneReplyType StateMultiZoneReply
 
-word16ToReplyType x
+word16leToReplyType x
   = Left $ "no case for " <> show x
 
 class MessageId a where
@@ -531,10 +580,10 @@ class MessageId a where
 
   msgCons :: a
 
-  msgId :: a -> Word16
+  msgId :: a -> Word16le
   msgId _ = msgIdP (Proxy :: Proxy a)
 
-  msgIdP :: Proxy a -> Word16
+  msgIdP :: Proxy a -> Word16le
   msgIdP _ = msgId @a undefined
 
 
@@ -583,12 +632,12 @@ instance MessageId GetLocation where
   msgTyp = const $ DeviceMessageType GetLocationMessage
 
 newtype LifxUTC
-  = LifxUTC { unLifxUTC :: Word64 }
+  = LifxUTC { unLifxUTC :: Word64le }
   deriving Show
 
 instance Binary LifxUTC where
-  put = BinP.putWord64le . unLifxUTC
-  get = LifxUTC <$> BinG.getWord64le
+  put = Bin.put . unLifxUTC
+  get = LifxUTC <$> Bin.get
 
 data StateLocation
   = StateLocation
@@ -647,18 +696,18 @@ instance MessageId GetLightPower where
 data StateLightPower
   = StateLightPower
   { stlpLevel :: LightPower
-  , stlpDuration :: Word32
+  , stlpDuration :: Word32le
   }
   deriving Show
 
 instance Binary StateLightPower where
   put StateLightPower {..} = do
     Bin.put stlpLevel
-    BinP.putWord32le stlpDuration
+    Bin.put stlpDuration
 
   get = do
     stlpLevel <- Bin.get
-    stlpDuration <- BinG.getWord32le
+    stlpDuration <- Bin.get
     pure $ StateLightPower {..}
 
 instance WithSize StateLightPower where
@@ -689,17 +738,17 @@ data StateLight
   , stliReserved :: Int16
   , stliPower :: LightPower
   , stliLabel :: Label
-  , stliReserved2 :: Word64
+  , stliReserved2 :: Word64le
   }
   deriving Show
 
 newtype LightPower
-  = LightPower { unLightPower :: Word16 }
+  = LightPower { unLightPower :: Word16le }
   deriving Show
 
 instance Binary LightPower where
-  put = BinP.putWord16le . unLightPower
-  get = LightPower <$> BinG.getWord16le
+  put = Bin.put . unLightPower
+  get = LightPower <$> Bin.get
 
 instance Binary StateLight where
   put StateLight {..} = do
@@ -707,14 +756,14 @@ instance Binary StateLight where
     BinP.putInt16le stliReserved
     Bin.put stliPower
     Bin.put stliLabel
-    BinP.putWord64le stliReserved2
+    Bin.put stliReserved2
 
   get = do
     stliColor <- Bin.get
     stliReserved <- BinG.getInt16le
     stliPower <- Bin.get
     stliLabel <- Bin.get
-    stliReserved2 <- BinG.getWord64le
+    stliReserved2 <- Bin.get
     pure $ StateLight {..}
 
 instance WithSize StateLight where
@@ -811,25 +860,25 @@ instance WithSize GetGroup where
 
 data SetPower
   = SetPower
-  { spLevel :: !Word16 }
+  { spLevel :: !Word16le }
   deriving Show
 
 instance Binary SetPower where
   put
-    = BinP.putWord16le . spLevel
+    = Bin.put . spLevel
   get
-    = SetPower <$> BinG.getWord16le
+    = SetPower <$> Bin.get
 
 data StatePower
   = StatePower
-  { stpLevel :: !Word16 }
+  { stpLevel :: !Word16le }
   deriving Show
 
 instance Binary StatePower where
   put
-    = BinP.putWord16le . stpLevel
+    = Bin.put . stpLevel
   get
-    = StatePower <$> BinG.getWord16le
+    = StatePower <$> Bin.get
 
 data SetLabel
   = SetLabel
@@ -845,10 +894,10 @@ instance Binary SetLabel where
 data State
   = State
   { sColor :: !HSBK
-  , sReserved :: !Int16
-  , sPower :: !Word16
+  , sReserved :: !Int16le
+  , sPower :: !Word16le
   , sLabel :: !Label
-  , sReserved2 :: !Word64
+  , sReserved2 :: !Word64le
   }
   deriving Show
 
@@ -856,17 +905,17 @@ instance Binary State where
   put State {..}
     = do
     Bin.put sColor
-    BinP.putInt16le sReserved
-    BinP.putWord16le sPower
+    Bin.put sReserved
+    Bin.put sPower
     Bin.put sLabel
-    BinP.putWord64le sReserved2
+    Bin.put sReserved2
   get
     = State
     <$> Bin.get
-    <*> BinG.getInt16le
-    <*> BinG.getWord16le
     <*> Bin.get
-    <*> BinG.getWord64le
+    <*> Bin.get
+    <*> Bin.get
+    <*> Bin.get
 
 data Acknowledgement
   = Acknowledgement
@@ -884,7 +933,7 @@ data SetColor
   = SetColor
   { scReserved :: !()
   , scColor :: !HSBK
-  , scDuration :: !Word32 -- ms
+  , scDuration :: !Word32le -- ms
   }
   deriving Show
 
@@ -895,7 +944,7 @@ data GetService
 data StateService
   = StateService
   { ssService :: !Word8
-  , ssPort :: !Word32
+  , ssPort :: !Word32le
   }
   deriving Show
 
@@ -958,7 +1007,7 @@ serviceUDP
   = 1
 
 newtype UniqueSource
-  = UniqueSource { unUniqueSource :: Word32 }
+  = UniqueSource { unUniqueSource :: Word32le }
   deriving (Show, Eq, Generic)
 
 instance NFData UniqueSource where
@@ -984,7 +1033,7 @@ instance NFData Sequence where
 
 
 class WithSize a where
-  size :: a -> Word16
+  size :: a -> Word16le
 
 instance WithSize a => WithSize (Packet a) where
   size Packet {..}
@@ -1020,15 +1069,15 @@ instance WithSize StateService where
 
 instance Binary Target where
   put t
-    = BinP.putWord64le $ targetToWord64 t
+    = Bin.put $ targetToWord64le t
   get
-    = word64ToTarget <$> BinG.getWord64le
+    = word64leToTarget <$> Bin.get
 
 
-targetToWord64
+targetToWord64le
   :: Target
-  -> Word64
-targetToWord64 (Target (Mac t))
+  -> Word64le
+targetToWord64le (Target (Mac t))
   =
   let
     (b1, b2, b3, b4, b5, b6) = t
@@ -1042,10 +1091,10 @@ targetToWord64 (Target (Mac t))
   in
     r8 + r7 + r6 + r5 + r4 + r3
 
-word64ToTarget
-  :: Word64
+word64leToTarget
+  :: Word64le
   -> Target
-word64ToTarget n
+word64leToTarget n
   =
   let
     b6 = extractByte n 5
@@ -1072,9 +1121,9 @@ extractByte x t
 
 instance Binary UniqueSource where
   put (UniqueSource t)
-    = BinP.putWord32le t
+    = Bin.put t
   get
-    = UniqueSource <$> BinG.getWord32le
+    = UniqueSource <$> Bin.get
 
 instance Binary Sequence where
   put (Sequence t)
@@ -1085,14 +1134,14 @@ instance Binary Sequence where
 instance Binary Frame where
   put f@Frame {..}
     = do
-    BinP.putWord16le fSize -- Discovered from size of rest
+    Bin.put fSize -- Discovered from size of rest
     putFrame2ndByte f
     Bin.put fSource
 
   get
     = do
-    fSize <- BinG.getWord16le
-    frame2ndByte <- BinG.getWord16le
+    fSize <- Bin.get
+    frame2ndByte <- Bin.get @Word16le
     let
       fProtocol = extract frame2ndByte 0 11
       fOrigin = extract frame2ndByte 14 16
@@ -1122,7 +1171,7 @@ putFrame2ndByte
   :: Frame
   -> Put
 putFrame2ndByte Frame {..}
-  = BinP.putWord16le $
+  = Bin.put @Word16le $
   (fProtocol `shiftL` 0) +
   (bool 0 1 (addressableToBool fAddressable) `shiftL` 12) +
   (bool 0 1 (taggedToBool fTagged) `shiftL` 13) +
@@ -1166,20 +1215,20 @@ instance Binary ProtocolHeader where
   put _p@ProtocolHeader {..}
     = case phType of
     Request phTypeR -> do
-      BinP.putWord64le 0
-      BinP.putWord16le $ messageTypeToWord16 phTypeR
-      BinP.putWord16le 0
+      Bin.put @Word16le 0
+      Bin.put $ messageTypeToWord16le phTypeR
+      Bin.put @Word64le 0
     x -> fail $ "Attempting to encode a reply type" <> show x
 
   get
     = do
-    _ <- BinG.getWord64le
-    phType_ <- word16ToReplyType <$> BinG.getWord16le
+    _ <- Bin.get @Word64le
+    phType_ <- word16leToReplyType <$> Bin.get
     phType <- case phType_ of
       Left p -> fail $ show p
       Right p -> pure $ Reply p --TODO FIxme
 
-    _ <- BinG.getWord16le
+    _ <- Bin.get @Word16le
 
     pure ProtocolHeader {phReserved = 0,phReserved2 = (),..}
 
@@ -1188,29 +1237,29 @@ instance Binary SetColor where
     = do
     BinP.putWord8 0
     Bin.put scColor
-    BinP.putWord32le scDuration
+    Bin.put scDuration
 
   get
     = do
     scReserved <- () <$ BinG.getWord8
     scColor <- Bin.get
-    scDuration <- BinG.getWord32le
+    scDuration <- Bin.get
     pure $ SetColor {..}
 
 instance Binary HSBK where
   put _hsbk@HSBK {..}
     = do
-    BinP.putWord16le hsbkHue
-    BinP.putWord16le hsbkSaturation
-    BinP.putWord16le hsbkBrightness
-    BinP.putWord16le hsbkKelvin
+    Bin.put hsbkHue
+    Bin.put hsbkSaturation
+    Bin.put hsbkBrightness
+    Bin.put hsbkKelvin
 
   get
     = do
-    hsbkHue <- BinG.getWord16le
-    hsbkSaturation <- BinG.getWord16le
-    hsbkBrightness <- BinG.getWord16le
-    hsbkKelvin <- BinG.getWord16le
+    hsbkHue <- Bin.get
+    hsbkSaturation <- Bin.get
+    hsbkBrightness <- Bin.get
+    hsbkKelvin <- Bin.get
     pure $ HSBK {..}
 
 instance Binary GetService where
@@ -1223,7 +1272,7 @@ instance Binary StateService where
   put StateService {..}
     = do
     BinP.putWord8 ssService
-    BinP.putWord32le ssPort
+    Bin.put ssPort
 
   get
     = do
@@ -1232,7 +1281,7 @@ instance Binary StateService where
       $ fail
       $ "Not a StateService mismatched service: " <> show ssService
 
-    ssPort <- BinG.getWord32le
+    ssPort <- Bin.get
     pure StateService {..}
 
 instance Binary Header where
@@ -1378,7 +1427,7 @@ deviceIdToTarget
 deviceIdToTarget (DeviceId m) = Target m
 
 newtype DeviceAddress
-  = DeviceAddress Word32
+  = DeviceAddress Word32le
   deriving (Show, Eq)
 
 data DeviceSocketAddress
@@ -1387,7 +1436,7 @@ data DeviceSocketAddress
 
 instance Show DeviceSocketAddress where
   show (DeviceSocketAddress p (DeviceAddress w))
-    = "DeviceSocketAddress " <> show p <> " IP " <> show (hostAddressToTuple w)
+    = "DeviceSocketAddress " <> show p <> " IP " <> show (hostAddressToTuple $ unWord32le w)
 
 data Device
   = Device
@@ -1528,7 +1577,7 @@ sendToDevice
 sendToDevice SharedState {..} Device {..} packet
   = sendManyTo ssSocket (BSL.toChunks bytes) (SockAddrInet p w)
   where
-    DeviceSocketAddress p (DeviceAddress w) = dAddr
+    DeviceSocketAddress p (DeviceAddress (unWord32le -> w)) = dAddr
     bytes = Bin.encode packet
 
 getLocation'
@@ -1689,7 +1738,7 @@ newPacket ss@(SharedState {..}) runCb
   pure $ mkPacket
     AllTagged
     uniqueSource
-    (word64ToTarget 0)
+    (word64leToTarget 0)
     NoAckRequired
     NoResRequired
     nextSeq
@@ -1700,7 +1749,7 @@ socketAddrToDeviceSocketAddr
   :: SockAddr
   -> Maybe DeviceSocketAddress
 socketAddrToDeviceSocketAddr (SockAddrInet pa ha)
-  = Just $ DeviceSocketAddress pa (DeviceAddress ha)
+  = Just $ DeviceSocketAddress pa (DeviceAddress $ Word32le ha)
 socketAddrToDeviceSocketAddr _
   = Nothing
 
@@ -1730,14 +1779,6 @@ setCallbackForSeq SharedState {..} sequ cont
   $ atomically
   $ writeArray ssReplyCallbacks (unSequence sequ) cont
 
---data MissingInterfaceError
---  = MissingInterfaceError
---  deriving Show
-
---instance Exception MissingInterfaceError
-
---eitherC e l r = either l r e
-
 mkState
   :: IO AppState
 mkState = do
@@ -1747,14 +1788,6 @@ mkState = do
     val@(Sequence inner) <- readTVar nSeq
     writeTVar nSeq $! Sequence (inner + 1)
     pure val
-
---  ifaces <- (HM.fromList . fmap (NI.name &&& id)) <$> NI.getNetworkInterfaces
---  let
---    _net@(NI.IPv4 _hostAddr) = case HM.lookup "eth0" ifaces of
---      Just iface -> Right $ NI.ipv4 iface
---      Nothing -> Left MissingInterfaceError
---
---  eitherC eNet throwIO $ \(NI.IPv4 
 
   ssSocket <- socket AF_INET Datagram defaultProtocol
   let
