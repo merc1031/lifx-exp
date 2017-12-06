@@ -68,6 +68,8 @@ test-suite the-test
   main-is:             Spec.hs
   build-depends:       base
                      , the
+                     , hspec
+                     , QuickCheck
   ghc-options:         -threaded
   default-language:    Haskell2010
 

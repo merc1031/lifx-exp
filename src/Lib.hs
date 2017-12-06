@@ -175,7 +175,7 @@ instance Binary Int64le where
 data Tagged
   = SingleTagged -- Encodes as 0, means FrameAddress `target` must be a MAC
   | AllTagged -- Encodes as 1, means FrameAddress must be 0 and will be sent to all lights
-  deriving (Show, Generic)
+  deriving (Show, Eq, Generic)
 
 instance NFData Tagged where
   rnf
@@ -185,7 +185,7 @@ instance NFData Tagged where
 data Addressable
   = NoFrameAddress
   | HasFrameAddress -- Encodes as 1, always, meaning a `target` field exists
-  deriving (Show, Generic)
+  deriving (Show, Eq, Generic)
 
 instance NFData Addressable where
   rnf
@@ -194,7 +194,7 @@ instance NFData Addressable where
 data AckRequired
   = NoAckRequired
   | AckRequired
-  deriving (Show, Generic)
+  deriving (Show, Eq, Generic)
 
 instance NFData AckRequired where
   rnf
@@ -203,7 +203,7 @@ instance NFData AckRequired where
 data ResRequired
   = NoResRequired
   | ResRequired
-  deriving (Show, Generic)
+  deriving (Show, Eq, Generic)
 
 instance NFData ResRequired where
   rnf
@@ -303,7 +303,7 @@ data Frame
   , fProtocol :: !Word16le -- 1024
   , fSource :: !UniqueSource
   }
-  deriving (Show, Generic)
+  deriving (Show, Eq, Generic)
 
 instance NFData Frame where
   rnf
@@ -322,7 +322,7 @@ data FrameAddress
   , faResRequired :: !ResRequired
   , faSequence :: !Sequence
   }
-  deriving (Show, Generic)
+  deriving (Show, Eq, Generic)
 
 instance NFData FrameAddress where
   rnf
@@ -331,7 +331,7 @@ instance NFData FrameAddress where
 
 newtype UnusedMac
   = UnusedMac (Mac ())
-  deriving (Show, Generic)
+  deriving (Show, Eq, Generic)
 
 instance NFData UnusedMac where
   rnf
@@ -345,7 +345,7 @@ data ProtocolHeader
   , phType :: !Direction
   , phReserved2 :: !()
   }
-  deriving (Show, Generic)
+  deriving (Show, Eq, Generic)
 
 instance NFData ProtocolHeader where
   rnf
@@ -359,7 +359,7 @@ data Packet a
   , pProtocolHeader :: ProtocolHeader
   , pPayload :: a
   }
-  deriving Show
+  deriving (Show, Eq)
 
 -- Layout in bits:   16|16|16|16
 --                   ui|ui|ui|ui
@@ -386,7 +386,7 @@ instance Binary Label where
 data Direction
   = Request MessageType
   | Reply ReplyType
-  deriving (Show, Generic)
+  deriving (Show, Eq, Generic)
 
 instance NFData Direction where
   rnf
@@ -397,7 +397,7 @@ data MessageType
   = DeviceMessageType DeviceMessage
   | LightMessageType LightMessage
   | MultiZoneMessageType MultiZoneMessage
-  deriving (Show, Generic)
+  deriving (Show, Eq, Generic)
 
 instance NFData MessageType where
   rnf
@@ -408,7 +408,7 @@ data ReplyType
   = DeviceReplyType DeviceReply
   | LightReplyType LightReply
   | MultiZoneReplyType MultiZoneReply
-  deriving (Show, Generic)
+  deriving (Show, Eq, Generic)
 
 instance NFData ReplyType where
   rnf
@@ -432,7 +432,7 @@ data DeviceMessage
   | GetGroupMessage
   | SetGroupMessage
   | EchoMessage
-  deriving (Show, Generic)
+  deriving (Show, Eq, Generic)
 
 instance NFData DeviceMessage where
   rnf
@@ -447,7 +447,7 @@ data LightMessage
   | SetLightPowerMessage
   | GetInfraredMessage
   | SetInfraredMessage
-  deriving (Show, Generic)
+  deriving (Show, Eq, Generic)
 
 instance NFData LightMessage where
   rnf
@@ -457,7 +457,7 @@ instance NFData LightMessage where
 data MultiZoneMessage
   = SetColorZonesMessage
   | GetColorZonesMessage
-  deriving (Show, Generic)
+  deriving (Show, Eq, Generic)
 
 instance NFData MultiZoneMessage where
   rnf
@@ -477,7 +477,7 @@ data DeviceReply
   | StateLocationReply
   | StateGroupReply
   | EchoReply
-  deriving (Show, Generic)
+  deriving (Show, Eq, Generic)
 
 instance NFData DeviceReply where
   rnf
@@ -487,7 +487,7 @@ data LightReply
   = StateReply
   | StateInfraredReply
   | StateLightPowerReply
-  deriving (Show, Generic)
+  deriving (Show, Eq, Generic)
 
 instance NFData LightReply where
   rnf
@@ -496,7 +496,7 @@ instance NFData LightReply where
 data MultiZoneReply
   = StateZoneReply
   | StateMultiZoneReply
-  deriving (Show, Generic)
+  deriving (Show, Eq, Generic)
 
 instance NFData MultiZoneReply where
   rnf
@@ -1040,7 +1040,7 @@ instance NFData UniqueSource where
 
 newtype Target
   = Target { unTarget :: Mac Word8 {-Word64-} }
-  deriving Generic
+  deriving (Eq, Generic)
 
 instance Show Target where
   show (Target t)
