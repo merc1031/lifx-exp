@@ -38,6 +38,7 @@ library
                       , deepseq
                       , deepseq-generics
                       , unordered-containers
+                      , QuickCheck
   default-language:    Haskell2010
   ghc-options: -Wall -Werror
 
@@ -70,6 +71,8 @@ test-suite the-test
                      , the
                      , hspec
                      , QuickCheck
+                     , binary
+                     , generic-random
   ghc-options:         -threaded
   default-language:    Haskell2010
 

@@ -15,6 +15,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeFamilyDependencies #-}
@@ -99,6 +100,7 @@ import            Network.Socket                ( Socket (..)
 import            Network.Socket.ByteString
 import            Numeric                       ( showHex )
 import            Text.Printf
+--import            Test.QuickCheck               (Arbitrary (..) )
 import qualified  Data.Binary                   as Bin
 import qualified  Data.Binary.Bits              as Bits
 import qualified  Data.Binary.Get               as BinG
@@ -122,6 +124,8 @@ newtype Word32le
 newtype Word64le
   = Word64le { unWord64le :: Word64 }
   deriving newtype (Num, Real, Enum, Integral, Show, Read, Eq, Ord, Bits, NFData)
+
+--deriving newtype instance Arbitrary Word64le
 
 instance Binary Word16le where
   put
@@ -963,7 +967,7 @@ data SetColor
 
 data GetService
   = GetService
-  deriving Show
+  deriving (Show, Eq)
 
 data StateService
   = StateService
