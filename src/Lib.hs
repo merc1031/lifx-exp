@@ -7,6 +7,7 @@
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE GADTs #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE LambdaCase #-}
@@ -619,6 +620,25 @@ newtype GroupId
   = GroupId { unGroupId :: ByteId16 }
   deriving (Show, Eq)
   deriving newtype Binary
+
+
+data Magic
+  = O
+  | I
+  | S
+
+data LifxProtocol (a :: Magic) where
+  GetLocation' :: LifxProtocol 'O
+  StateLocation' :: Int -> LifxProtocol 'S
+  SetLocation' :: Int -> LifxProtocol 'S
+
+
+instance WithSize (LifxProtocol a) where
+  size GetLocation' = 0
+  size StateLocation' {} = 4
+  size SetLocation' {} = 4
+
+deriving instance Eq (LifxProtocol a)
 
 
 data GetLocation

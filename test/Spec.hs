@@ -163,6 +163,8 @@ instance Arbitrary ProtocolHeader where
       <*> arbitrary
       <*> arbitrary
 
+instance Arbitrary (LifxProtocol a) where
+  arbitrary = genericArbitraryU
 ---- Carries a Proxy with a bunch of dictionaries
 --data ProxyA where
 --  ProxyA :: (Eq a, Show a, Binary a, WithSize a, Arbitrary a) => Proxy a -> ProxyA
@@ -187,4 +189,4 @@ main
 main = hspec $ do
   describe "Packets" $ do
     it "encoding and decoding roundtrips" $
-      property $ \p -> (Bin.decode . Bin.encode) p `shouldBe` (p :: Packet GetService)
+      property $ \p -> (Bin.decode . Bin.encode) p `shouldBe` (p :: Packet (LifxProtocol 'O))
