@@ -14,6 +14,7 @@
 {-# LANGUAGE MagicHash #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE PolyKinds #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE StandaloneDeriving #-}
@@ -113,6 +114,37 @@ import qualified  Data.Text.Lazy                as TL
 import qualified  Data.Text.Lazy.Encoding       as TLE
 import qualified  Network.Info                  as NI
 
+--data PH a = PH Word16le (Proxy a)
+--data P a = P (PH a) a
+--
+--data PHolder a = PHolder (Proxy a, Word16le)
+--
+--instance KnownNat n => Binary (PHolder n) where
+--  get = do
+--    mip <- Bin.get
+--    if mip == (fromIntegral $ natVal (Proxy :: Proxy n))
+--    then
+--      pure $ PHolder (Proxy :: Proxy n, mip)
+--    else
+--      fail "uh"
+--
+--  put (PHolder (Proxy, mip)) = Bin.put mip
+--
+--instance KnownNat n => Binary (PHolder n) where
+--  get = do
+--    mip <- Bin.get
+--    if mip == (fromIntegral $ natVal (Proxy :: Proxy n))
+--    then
+--      pure $ PHolder (Proxy :: Proxy n, mip)
+--    else
+--      fail "uh"
+--
+--  put (PHolder (Proxy, mip)) = Bin.put mip
+--  parseJSON (A.String s)
+--    | s == pack (symbolVal (Proxy :: Proxy s))
+--      = return (Proxy :: Proxy s)
+--
+--  parseJSON _ = mzero
 
 newtype Word16le
   = Word16le { unWord16le :: Word16 }
@@ -1283,9 +1315,9 @@ instance Binary ProtocolHeader where
   put _p@ProtocolHeader {..}
     = case phType of
     Request phTypeR -> do
-      Bin.put @Word16le 0
-      Bin.put $ messageTypeToWord16le phTypeR
       Bin.put @Word64le 0
+      Bin.put $ messageTypeToWord16le phTypeR
+      Bin.put @Word16le 0
     x -> fail $ "Attempting to encode a reply type" <> show x
 
   get
@@ -1399,7 +1431,9 @@ instance NFData Header where
 
 
 broadcast
-  :: Binary a
+  :: ( Binary a
+     , Show a
+     )
   => Socket
   -> SockAddr
   -> a
@@ -1409,6 +1443,8 @@ broadcast sock bcast a
   let
     enc = Bin.encode a
   in
+    (print $ "send packet" <> show a) >>
+    (print $ "send packet data " <> (show $ BSL16.encode enc)) >>
     sendManyTo sock (BSL.toChunks enc) bcast
 
 data CallbackWrap
@@ -1655,7 +1691,7 @@ sendToDevice
   -> Packet a
   -> IO ()
 sendToDevice SharedState {..} Device {..} packet
-  = sendManyTo ssSocket (BSL.toChunks bytes) (SockAddrInet p w)
+  = (print $ BSL16.encode bytes) >> sendManyTo ssSocket (BSL.toChunks bytes) (SockAddrInet p w)
   where
     DeviceSocketAddress p (DeviceAddress (unWord32le -> w)) = dAddr
     bytes = Bin.encode packet
@@ -1791,6 +1827,7 @@ discoveryThread
   -> IO (Async ())
 discoveryThread ss@SharedState {..} bcast
   = async $ forever $ do
+  logStr "Sending"
   gsp <- newPacket ss onStateService
   broadcast
     ssSocket
@@ -1912,3 +1949,4 @@ mkTestPacket tag src tar ack res sequ typ pay
     p = Packet f fa ph pay
   in
     p
+

@@ -22,11 +22,14 @@
 {-# LANGUAGE TypeFamilyDependencies #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE ViewPatterns #-}
+{-# OPTIONS_GHC -fno-warn-orphans #-}
+{-# OPTIONS_GHC -fno-warn-unused-imports #-}
 import Lib
 
 import Control.Monad (forM_)
 import Data.Bits
 import Data.Binary
+import Data.Semigroup
 import Data.Proxy
 import GHC.Generics
 
@@ -35,6 +38,7 @@ import Generic.Random
 import Test.Hspec
 import Test.QuickCheck
 import qualified Data.Binary as Bin
+import qualified Data.ByteString.Base16.Lazy as BSL16
 
 instance Arbitrary Direction where
   arbitrary
@@ -163,8 +167,8 @@ instance Arbitrary ProtocolHeader where
       <*> arbitrary
       <*> arbitrary
 
-instance Arbitrary (LifxProtocol a) where
-  arbitrary = genericArbitraryU
+--instance Arbitrary (LifxProtocol a) where
+--  arbitrary = genericArbitraryU
 ---- Carries a Proxy with a bunch of dictionaries
 --data ProxyA where
 --  ProxyA :: (Eq a, Show a, Binary a, WithSize a, Arbitrary a) => Proxy a -> ProxyA
@@ -184,9 +188,32 @@ instance Arbitrary (LifxProtocol a) where
 --      [ ProxyA (Proxy :: Proxy (Packet GetService))
 --      ]
 
+mkTestDiscoveryPacket
+  :: Sequence
+  -> Packet GetService
+mkTestDiscoveryPacket nextSeq
+  = mkPacket
+  AllTagged
+  uniqueSource
+  (word64leToTarget 0)
+  NoAckRequired
+  NoResRequired
+  nextSeq
+  (DeviceMessageType GetServiceMessage)
+  GetService
+
 main
   :: IO ()
 main = hspec $ do
   describe "Packets" $ do
-    it "encoding and decoding roundtrips" $
-      property $ \p -> (Bin.decode . Bin.encode) p `shouldBe` (p :: Packet (LifxProtocol 'O))
+    it "disovery packet encodes correctly (critical)" $
+      property $ \x -> do
+        let
+          seqEnc = BSL16.encode $ Bin.encode x
+        (BSL16.encode $ Bin.encode $ mkTestDiscoveryPacket (Sequence x)) `shouldBe` ("24000034d2040000000000000000000000000000000000" <> seqEnc <> "000000000000000002000000")
+
+--    it "encoding and decoding roundtrips" $
+--      property $ \x -> (BSL16.encode $ Bin.encode x) `shouldBe` "24000034d204000000000000000000000000000000000000000000000000000002000000"
+--                                                                                                                                    1000000000000000002000000
+--                                                                                                                                   11000000000000000002000000
+--                                                                                                                                   ff000000000000000002000000

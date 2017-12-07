@@ -68,6 +68,7 @@ test-suite the-test
   hs-source-dirs:      test
   main-is:             Spec.hs
   build-depends:       base
+                     , base16-bytestring
                      , the
                      , hspec
                      , QuickCheck
