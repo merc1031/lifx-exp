@@ -1077,6 +1077,7 @@ mkPacket tag src tar ack res sequ typ pay
     f = mkFrame p tag src
     fa = mkFrameAddress tar ack res sequ
     ph = mkProtocolHeader typ
+    -- Only make a refernce to `p` here to "tie the knot" since mkFrame needs the `p` size
     p = Packet f fa ph pay
   in
     p
@@ -1443,8 +1444,6 @@ broadcast sock bcast a
   let
     enc = Bin.encode a
   in
-    (print $ "send packet" <> show a) >>
-    (print $ "send packet data " <> (show $ BSL16.encode enc)) >>
     sendManyTo sock (BSL.toChunks enc) bcast
 
 data CallbackWrap
@@ -1636,9 +1635,7 @@ receiveThread
   -> IO (Async ())
 receiveThread ss@SharedState {..}
   = async $ forever $ do
-  logStr "About to recv"
   (!bs, sa) <- recvFrom ssSocket 1500
-  print $  "Recvd: " <> show bs
   let
     bsl = BSL.fromStrict bs
     headerE = runExcept $ decodeHeader bsl
@@ -1690,8 +1687,9 @@ sendToDevice
   -> Device
   -> Packet a
   -> IO ()
-sendToDevice SharedState {..} Device {..} packet
-  = (print $ BSL16.encode bytes) >> sendManyTo ssSocket (BSL.toChunks bytes) (SockAddrInet p w)
+sendToDevice SharedState {..} d@(Device {..}) packet
+  = (print $ "Sending to: " <> show d <> " Data: " <> show (BSL16.encode bytes)) >>
+    sendManyTo ssSocket (BSL.toChunks bytes) (SockAddrInet p w)
   where
     DeviceSocketAddress p (DeviceAddress (unWord32le -> w)) = dAddr
     bytes = Bin.encode packet
@@ -1699,11 +1697,17 @@ sendToDevice SharedState {..} Device {..} packet
 updateLocation
   :: SharedState
   -> Device
-  -> StateLocation
+  -> Packet StateLocation
   -> IO ()
-updateLocation SharedState {..} Device {..} StateLocation {..}
+updateLocation SharedState {..} Device {..} Packet {..}
   = do
-  pure ()
+  atomically $ do
+    devs <- readTVar ssDevices
+    let
+      newDevs = HM.adjust (\l@(Light {..}) -> l { lLocation = Just stlLocation } ) dDeviceId devs
+    writeTVar ssDevices newDevs
+  where
+    StateLocation {..} = pPayload
 
 
 getLocation'
@@ -1715,7 +1719,24 @@ getLocation' ss d
   outerGet ss d $ \_ p@(Packet {..}) _ _ -> do
     let
       StateLocation {..} = pPayload
-    print $ show p
+    print $ "Got location: " <> show p
+    updateLocation ss d p
+
+
+updateGroup
+  :: SharedState
+  -> Device
+  -> Packet StateGroup
+  -> IO ()
+updateGroup SharedState {..} Device {..} Packet {..}
+  = do
+  atomically $ do
+    devs <- readTVar ssDevices
+    let
+      newDevs = HM.adjust (\l@(Light {..}) -> l { lGroup = Just stgGroup } ) dDeviceId devs
+    writeTVar ssDevices newDevs
+  where
+    StateGroup {..} = pPayload
 
 getGroup'
   :: SharedState
@@ -1725,7 +1746,22 @@ getGroup' ss d
   = outerGet ss d $ \_ p@(Packet {..}) _ _ -> do
   let
     StateGroup {..} = pPayload
-  print $ show p
+  print $ "Got Group: " <> show p
+
+updateLabel
+  :: SharedState
+  -> Device
+  -> Packet StateLabel
+  -> IO ()
+updateLabel SharedState {..} Device {..} Packet {..}
+  = do
+  atomically $ do
+    devs <- readTVar ssDevices
+    let
+      newDevs = HM.adjust (\l@(Light {..}) -> l { lLabel = Just stlaLabel } ) dDeviceId devs
+    writeTVar ssDevices newDevs
+  where
+    StateLabel {..} = pPayload
 
 getLabel'
   :: SharedState
@@ -1735,7 +1771,22 @@ getLabel' ss d
   = outerGet ss d $ \_ p@(Packet {..}) _ _ -> do
   let
     StateLabel {..} = pPayload
-  print $ show p
+  print $ "Got Label: " <> show p
+
+updateLightPower
+  :: SharedState
+  -> Device
+  -> Packet StateLightPower
+  -> IO ()
+updateLightPower SharedState {..} Device {..} Packet {..}
+  = do
+  atomically $ do
+    devs <- readTVar ssDevices
+    let
+      newDevs = HM.adjust (\l@(Light {..}) -> l { lPower = Just stlpLevel } ) dDeviceId devs
+    writeTVar ssDevices newDevs
+  where
+    StateLightPower {..} = pPayload
 
 getLightPower'
   :: SharedState
@@ -1745,7 +1796,31 @@ getLightPower' ss d
   = outerGet ss d $ \_ p@(Packet {..}) _ _ -> do
   let
     StateLightPower {..} = pPayload
-  print $ show p
+  print $ "Got LightPower: " <> show p
+
+updateLight
+  :: SharedState
+  -> Device
+  -> Packet StateLight
+  -> IO ()
+updateLight SharedState {..} Device {..} Packet {..}
+  = do
+  atomically $ do
+    devs <- readTVar ssDevices
+    let
+      newDevs = HM.adjust
+         (\l@(Light {..})
+             -> l
+             { lPower = Just stliPower
+             , lColor = Just stliColor
+             , lLabel = Just stliLabel
+             }
+         )
+         dDeviceId
+         devs
+    writeTVar ssDevices newDevs
+  where
+    StateLight {..} = pPayload
 
 getLight'
   :: SharedState
@@ -1755,7 +1830,7 @@ getLight' ss d
   = outerGet ss d $ \_ p@(Packet {..}) _ _ -> do
   let
     StateLight {..} = pPayload
-  print $ show p
+  print $ "Got Light: " <> show p
 
 outerGet
   :: forall get
@@ -1827,7 +1902,6 @@ discoveryThread
   -> IO (Async ())
 discoveryThread ss@SharedState {..} bcast
   = async $ forever $ do
-  logStr "Sending"
   gsp <- newPacket ss onStateService
   broadcast
     ssSocket
