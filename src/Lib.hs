@@ -757,10 +757,9 @@ instance MessageId GetLightPower where
   msgId = const 116
   msgTyp = const $ LightMessageType GetLightPowerMessage
 
-data StateLightPower
+newtype StateLightPower
   = StateLightPower
   { stlpLevel :: LightPower
-  , stlpDuration :: Word32le
   }
   deriving Show
 
@@ -768,12 +767,10 @@ instance Binary StateLightPower where
   put StateLightPower {..}
     = do
     Bin.put stlpLevel
-    Bin.put stlpDuration
 
   get
     = do
     stlpLevel <- Bin.get
-    stlpDuration <- Bin.get
     pure $ StateLightPower {..}
 
 instance WithSize StateLightPower where
@@ -1670,11 +1667,11 @@ onStateService ss@(SharedState {..}) Packet {..} sa _orig
           if (lDevice l /= incomingDevice && False)
           then do
             --writeTVar ssDevices $ HM.insert (dDeviceId incomingDevice) (Light incomingDevice Nothing Nothing Nothing Nothing Nothing) devs
-            pure $ map (flip uncurry (ss, incomingDevice)) [getLocation', getGroup', getLabel', getLightPower', getLight']
+            pure $ map (flip uncurry (ss, incomingDevice)) [getLocation, getGroup, getLabel, getLightPower, getLight]
           else pure []
         Nothing -> do
           writeTVar ssDevices $ HM.insert (dDeviceId incomingDevice) (Light incomingDevice Nothing Nothing Nothing Nothing Nothing) devs
-          pure $ map (flip uncurry (ss, incomingDevice)) [getLocation', getGroup', getLabel', getLightPower', getLight']
+          pure $ map (flip uncurry (ss, incomingDevice)) [getLocation, getGroup, getLabel, getLightPower, getLight]
 
     sequence_ moreInfo
   where
@@ -1688,7 +1685,7 @@ sendToDevice
   -> Packet a
   -> IO ()
 sendToDevice SharedState {..} d@(Device {..}) packet
-  = (print $ "Sending to: " <> show d <> " Data: " <> show (BSL16.encode bytes)) >>
+  = (printIt $ "Sending to: " <> show d <> " Data: " <> show (BSL16.encode bytes)) >>
     sendManyTo ssSocket (BSL.toChunks bytes) (SockAddrInet p w)
   where
     DeviceSocketAddress p (DeviceAddress (unWord32le -> w)) = dAddr
@@ -1710,16 +1707,16 @@ updateLocation SharedState {..} Device {..} Packet {..}
     StateLocation {..} = pPayload
 
 
-getLocation'
+getLocation
   :: SharedState
   -> Device
   -> IO ()
-getLocation' ss d
+getLocation ss d
   = do
   outerGet ss d $ \_ p@(Packet {..}) _ _ -> do
     let
       StateLocation {..} = pPayload
-    print $ "Got location: " <> show p
+    printIt $ "Got location: " <> show p
     updateLocation ss d p
 
 
@@ -1738,15 +1735,15 @@ updateGroup SharedState {..} Device {..} Packet {..}
   where
     StateGroup {..} = pPayload
 
-getGroup'
+getGroup
   :: SharedState
   -> Device
   -> IO ()
-getGroup' ss d
+getGroup ss d
   = outerGet ss d $ \_ p@(Packet {..}) _ _ -> do
   let
     StateGroup {..} = pPayload
-  print $ "Got Group: " <> show p
+  printIt $ "Got Group: " <> show p
 
 updateLabel
   :: SharedState
@@ -1763,15 +1760,15 @@ updateLabel SharedState {..} Device {..} Packet {..}
   where
     StateLabel {..} = pPayload
 
-getLabel'
+getLabel
   :: SharedState
   -> Device
   -> IO ()
-getLabel' ss d
+getLabel ss d
   = outerGet ss d $ \_ p@(Packet {..}) _ _ -> do
   let
     StateLabel {..} = pPayload
-  print $ "Got Label: " <> show p
+  printIt $ "Got Label: " <> show p
 
 updateLightPower
   :: SharedState
@@ -1788,15 +1785,15 @@ updateLightPower SharedState {..} Device {..} Packet {..}
   where
     StateLightPower {..} = pPayload
 
-getLightPower'
+getLightPower
   :: SharedState
   -> Device
   -> IO ()
-getLightPower' ss d
+getLightPower ss d
   = outerGet ss d $ \_ p@(Packet {..}) _ _ -> do
   let
     StateLightPower {..} = pPayload
-  print $ "Got LightPower: " <> show p
+  printIt $ "Got LightPower: " <> show p
 
 updateLight
   :: SharedState
@@ -1822,15 +1819,15 @@ updateLight SharedState {..} Device {..} Packet {..}
   where
     StateLight {..} = pPayload
 
-getLight'
+getLight
   :: SharedState
   -> Device
   -> IO ()
-getLight' ss d
+getLight ss d
   = outerGet ss d $ \_ p@(Packet {..}) _ _ -> do
   let
     StateLight {..} = pPayload
-  print $ "Got Light: " <> show p
+  printIt $ "Got Light: " <> show p
 
 outerGet
   :: forall get
@@ -1841,7 +1838,7 @@ outerGet
   -> IO ()
 outerGet ss d cb
   = do
-  p <- newPacket ss cb
+  p <- newPacket' ss cb
   let
     fp = p msgCons
     np = fp { pFrameAddress = (pFrameAddress fp) { faTarget = deviceIdToTarget $ dDeviceId d} }
@@ -1850,8 +1847,19 @@ outerGet ss d cb
 logStr
   :: String
   -> IO ()
-logStr
-  = print
+logStr x
+  = print space >> print x >> print space
+  where
+    space
+      :: String
+    space = ""
+
+printIt
+  :: Show a
+  => a
+  -> IO ()
+printIt (show -> s)
+  = logStr s
 
 data FoundDevice
   = FoundDevice
@@ -1868,18 +1876,43 @@ type MessageIdC c
     , WithSize (StateReply c)
     )
 
-newPacket
+newDiscoveryPacket
+  :: SharedState
+  -> (SharedState -> Packet StateService -> SockAddr -> BSL.ByteString -> IO ())
+  -> IO (Packet GetService)
+newDiscoveryPacket ss@(SharedState {..}) runCb
+  = do
+  pp <- newPacket ss runCb
+    $ \p@(Packet {..}) ->
+      let
+        f = pFrame
+        pFrame' = f { fTagged = AllTagged }
+      in
+        p { pFrame = pFrame' }
+  pure $ pp GetService
+
+newPacket'
   :: forall a
    . ( MessageIdC a )
   => SharedState
   -> (SharedState -> Packet (StateReply a) -> SockAddr -> BSL.ByteString -> IO ())
   -> IO (a -> Packet a)
-newPacket ss@(SharedState {..}) runCb
+newPacket' ss@(SharedState {..}) runCb
+  = newPacket ss runCb id
+
+newPacket
+  :: forall a
+   . ( MessageIdC a )
+  => SharedState
+  -> (SharedState -> Packet (StateReply a) -> SockAddr -> BSL.ByteString -> IO ())
+  -> (Packet a -> Packet a)
+  -> IO (a -> Packet a)
+newPacket ss@(SharedState {..}) runCb modify
   = do
   nextSeq <- ssNextSeq
   setCallbackForSeq ss nextSeq $ CallbackWrap decodePacket runCb
-  pure $ mkPacket
-    AllTagged
+  pure $ modify . mkPacket
+    SingleTagged
     uniqueSource
     (word64leToTarget 0)
     NoAckRequired
@@ -1902,11 +1935,11 @@ discoveryThread
   -> IO (Async ())
 discoveryThread ss@SharedState {..} bcast
   = async $ forever $ do
-  gsp <- newPacket ss onStateService
+  gsp <- newDiscoveryPacket ss onStateService
   broadcast
     ssSocket
     bcast
-    $ gsp GetService
+    gsp
   threadDelay $ 10 * 1000000
 
 setCallbackForSeq
@@ -1924,7 +1957,6 @@ mkState
   :: IO AppState
 mkState
   = do
-  print =<< getNumCapabilities
   nSeq <- newTVarIO (Sequence 0)
   ssNextSeq <- pure $ atomically $ do
     val@(Sequence inner) <- readTVar nSeq

@@ -74,6 +74,7 @@ test-suite the-test
                      , QuickCheck
                      , binary
                      , generic-random
+                     , pretty-simple
   ghc-options:         -threaded
   default-language:    Haskell2010
 

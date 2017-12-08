@@ -10,6 +10,7 @@ import Control.Concurrent
 import Control.Concurrent.Async
 import Options.Applicative
 import Data.Semigroup ((<>))
+import Text.Pretty.Simple
 
 data Config = Config
   { commandA      :: Command
@@ -55,10 +56,10 @@ main :: IO ()
 main = do
   Config {..} <- customExecParser p opts
   r <- mkState
-  threadDelay 1000000
+  threadDelay 3000000
 
   cached <- listCached (asSharedState r)
-  print cached
+  pprint cached
 
   resR <- waitCatch $ asReceiveThread r
   resD <- waitCatch $ asDiscoveryThread r
