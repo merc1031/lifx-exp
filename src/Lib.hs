@@ -13,6 +13,7 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MagicHash #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE PolyKinds #-}
 {-# LANGUAGE RecordWildCards #-}
@@ -214,6 +215,13 @@ data Tagged
   | AllTagged -- Encodes as 1, means FrameAddress must be 0 and will be sent to all lights
   deriving (Show, Eq, Generic)
 
+data STagged t where
+  SSingleTagged :: STagged SingleTagged
+  SAllTagged :: STagged AllTagged
+
+deriving instance Show (STagged t)
+deriving instance Eq (STagged t)
+
 instance NFData Tagged where
   rnf
     = genericRnfV1
@@ -331,18 +339,18 @@ listCached SharedState {..}
 
 -- Layout in bits:   16|2|1|1|12|32
 --                   ui|ui|b|b|ui|ui
-data Frame
+data Frame t
   = Frame
   { fSize :: !Word16le
   , fOrigin :: !Word8 -- 0
-  , fTagged :: !Tagged
+  , fTagged :: !(STagged t)
   , fAddressable :: !Addressable -- 1
   , fProtocol :: !Word16le -- 1024
   , fSource :: !UniqueSource
   }
   deriving (Show, Eq, Generic)
 
-instance NFData Frame where
+instance NFData (Frame t) where
   rnf
     = genericRnfV1
 
@@ -350,9 +358,9 @@ instance NFData Frame where
 -- Layout in bits:   64|48|6|1|1|8
 --                   ui|ui|r|b|b|ui
 --                      [6]
-data FrameAddress
+data FrameAddress t
   = FrameAddress
-  { faTarget :: !Target
+  { faTarget :: !t
   , faReserved :: !UnusedMac -- 0
   , faReserved2 :: !()
   , faAckRequired :: !AckRequired
@@ -361,7 +369,7 @@ data FrameAddress
   }
   deriving (Show, Eq, Generic)
 
-instance NFData FrameAddress where
+instance NFData (FrameAddress t) where
   rnf
     = genericRnfV1
 
@@ -388,15 +396,20 @@ instance NFData ProtocolHeader where
   rnf
     = genericRnfV1
 
+type family TargetVal (t :: Tagged) = r | r -> t where
+  TargetVal SingleTagged = Target
+  TargetVal AllTagged = UnusedMac
 
-data Packet a
+data Packet a t
   = Packet
-  { pFrame :: Frame
-  , pFrameAddress :: FrameAddress
+  { pFrame :: Frame t
+  , pFrameAddress :: FrameAddress (TargetVal t)
   , pProtocolHeader :: ProtocolHeader
   , pPayload :: a
   }
-  deriving (Show, Eq)
+
+deriving instance (Show (TargetVal t)) => Show (Packet a t)
+deriving instance (Eq (TargetVal t)) => Eq (Packet a t)
 
 -- Layout in bits:   16|16|16|16
 --                   ui|ui|ui|ui
@@ -1033,19 +1046,19 @@ instance MessageId GetService where
 
 mkFrame
   :: WithSize a
-  => Packet a
-  -> Tagged
+  => Packet a t
+  -> STagged t
   -> UniqueSource
-  -> Frame
+  -> Frame t
 mkFrame par tag
   = Frame (size par) 0 tag HasFrameAddress 1024
 
 mkFrameAddress
-  :: Target
+  :: TargetVal t
   -> AckRequired
   -> ResRequired
   -> Sequence
-  -> FrameAddress
+  -> FrameAddress (TargetVal t)
 mkFrameAddress tar
   = FrameAddress tar (UnusedMac $ Mac ((), (), (), (), (), ())) ()
 
@@ -1059,15 +1072,15 @@ mkPacket
   :: ( WithSize a
      , Binary a
      )
-  => Tagged
+  => STagged t
   -> UniqueSource
-  -> Target
+  -> TargetVal t
   -> AckRequired
   -> ResRequired
   -> Sequence
   -> MessageType
   -> a
-  -> Packet a
+  -> Packet a t
 mkPacket tag src tar ack res sequ typ pay
   =
   let
@@ -1117,15 +1130,15 @@ instance NFData Sequence where
 class WithSize a where
   size :: a -> Word16le
 
-instance WithSize a => WithSize (Packet a) where
+instance WithSize a => WithSize (Packet a t) where
   size Packet {..}
     = size pFrame + size pFrameAddress + size pProtocolHeader + size pPayload
 
-instance WithSize Frame where
+instance WithSize (Frame t) where
   size
     = const 8
 
-instance WithSize FrameAddress where
+instance WithSize (FrameAddress t) where
   size
     = const 16
 
@@ -1213,7 +1226,7 @@ instance Binary Sequence where
   get
     = Sequence <$> BinG.getWord8
 
-instance Binary Frame where
+instance Binary (Frame t) where
   put f@Frame {..}
     = do
     Bin.put fSize -- Discovered from size of rest
@@ -1266,7 +1279,7 @@ extract' x m n
 
 
 putFrame2ndByte
-  :: Frame
+  :: Frame t
   -> Put
 putFrame2ndByte Frame {..}
   = Bin.put @Word16le $
@@ -1275,7 +1288,7 @@ putFrame2ndByte Frame {..}
   (bool 0 1 (taggedToBool fTagged) `shiftL` 13) +
   fromIntegral (fOrigin `shiftL` 14)
 
-instance Binary FrameAddress where
+instance Binary (FrameAddress t) where
   put _f@FrameAddress {..}
     = do
     Bin.put faTarget
@@ -1382,7 +1395,7 @@ instance Binary StateService where
     ssPort <- Bin.get
     pure StateService {..}
 
-instance Binary Header where
+instance Binary (Header t) where
   put Header {..}
     = do
     Bin.put hFrame
@@ -1414,15 +1427,17 @@ instance Binary Header where
 -- 16|2|1|1|12|32|64|48|6|1|1|8|64|16|16
 -- ui|ui|b|b|ui|ui|ui|ui|r|b|b|ui|ui|ui|r
 --                   [6]
-data Header
+data Header (t :: Tagged)
   = Header
-  { hFrame :: !Frame
-  , hFrameAddress :: !FrameAddress
+  { hFrame :: !(Frame t)
+  , hFrameAddress :: !(FrameAddress (TargetVal t))
   , hProtocolHeader :: !ProtocolHeader
   }
-  deriving (Show, Generic)
+  deriving (Generic)
 
-instance NFData Header where
+deriving instance (Show (TargetVal t)) => Show (Header t)
+
+instance NFData (Header t) where
   rnf
     = genericRnfV1
 
@@ -1444,14 +1459,14 @@ broadcast sock bcast a
     sendManyTo sock (BSL.toChunks enc) bcast
 
 data CallbackWrap
-  = forall a. (Show a, Binary a, WithSize a) =>
+  = forall a t. (Show a, Binary a, WithSize a) =>
   CallbackWrap
-  { runDecode :: !(Header -> BSL.ByteString -> Except PayloadDecodeError (Packet a))
-  , runCallback :: !(Callback a)
+  { runDecode :: !(Header t -> BSL.ByteString -> Except PayloadDecodeError (Packet a t))
+  , runCallback :: !(Callback a t)
   }
 
-type Callback a
-  = (SharedState -> Packet a -> SockAddr -> BSL.ByteString -> IO ())
+type Callback a t
+  = (SharedState -> Packet a t -> SockAddr -> BSL.ByteString -> IO ())
 
 instance Show CallbackWrap where
   show
@@ -1561,18 +1576,24 @@ data HeaderDecodeError
   , hdeOffset :: !BinG.ByteOffset
   }
   | ImproperSourceInHeader
-  { hdeHeader :: !Header
+  { hdeHeader :: !SomeHeader
   , hdeOrig :: !BSL.ByteString
   , hdeRemaining :: !BSL.ByteString
   , hdeOffset :: !BinG.ByteOffset
   }
   | ImproperSizeInHeader
-  { hdeHeader :: !Header
+  { hdeHeader :: !SomeHeader
   , hdeOrig :: !BSL.ByteString
   , hdeRemaining :: !BSL.ByteString
   , hdeOffset :: !BinG.ByteOffset
   }
   deriving (Show, Generic)
+
+instance Show SomeHeader where
+  show (SomeHeader h) = show h
+
+data SomeHeader
+  = forall t. SomeHeader (Header t)
 
 instance Exception HeaderDecodeError
 
@@ -1582,7 +1603,7 @@ instance NFData HeaderDecodeError where
 
 data PayloadDecodeError
   = PayloadDecodeFailed
-  { pdeHeader :: !Header
+  { pdeHeader :: !SomeHeader
   , pdeRemaining :: !BSL.ByteString
   , pdeRemainingAfterFail :: !BSL.ByteString
   , pdeOffsetAfterFail :: !BinG.ByteOffset
@@ -1593,7 +1614,7 @@ data PayloadDecodeError
 
 decodeHeader
   :: BSL.ByteString
-  -> Except HeaderDecodeError (Header, BSL.ByteString)
+  -> Except HeaderDecodeError (Header t, BSL.ByteString)
 decodeHeader bs
   = case Bin.decodeOrFail bs of
   Left (str, offset, err) ->
@@ -1612,9 +1633,9 @@ decodePacket
   :: ( Binary a
      , WithSize a
      )
-  => Header
+  => Header t
   -> BSL.ByteString
-  -> Except PayloadDecodeError (Packet a)
+  -> Except PayloadDecodeError (Packet a t)
 decodePacket hdr rema
   = case Bin.decodeOrFail rema of
   Left (str, offset, err) ->
@@ -1650,7 +1671,7 @@ receiveThread ss@SharedState {..}
 
 onStateService
   :: SharedState
-  -> Packet StateService
+  -> Packet StateService SingleTagged
   -> SockAddr
   -> BSL.ByteString
   -> IO ()
@@ -1682,7 +1703,7 @@ sendToDevice
      )
   => SharedState
   -> Device
-  -> Packet a
+  -> Packet a SingleTagged
   -> IO ()
 sendToDevice SharedState {..} d@(Device {..}) packet
   = (printIt $ "Sending to: " <> show d <> " Data: " <> show (BSL16.encode bytes)) >>
@@ -1694,7 +1715,7 @@ sendToDevice SharedState {..} d@(Device {..}) packet
 updateLocation
   :: SharedState
   -> Device
-  -> Packet StateLocation
+  -> Packet StateLocation SingleTagged
   -> IO ()
 updateLocation SharedState {..} Device {..} Packet {..}
   = do
@@ -1723,7 +1744,7 @@ getLocation ss d
 updateGroup
   :: SharedState
   -> Device
-  -> Packet StateGroup
+  -> Packet StateGroup SingleTagged
   -> IO ()
 updateGroup SharedState {..} Device {..} Packet {..}
   = do
@@ -1748,7 +1769,7 @@ getGroup ss d
 updateLabel
   :: SharedState
   -> Device
-  -> Packet StateLabel
+  -> Packet StateLabel SingleTagged
   -> IO ()
 updateLabel SharedState {..} Device {..} Packet {..}
   = do
@@ -1773,7 +1794,7 @@ getLabel ss d
 updateLightPower
   :: SharedState
   -> Device
-  -> Packet StateLightPower
+  -> Packet StateLightPower SingleTagged
   -> IO ()
 updateLightPower SharedState {..} Device {..} Packet {..}
   = do
@@ -1798,7 +1819,7 @@ getLightPower ss d
 updateLight
   :: SharedState
   -> Device
-  -> Packet StateLight
+  -> Packet StateLight SingleTagged
   -> IO ()
 updateLight SharedState {..} Device {..} Packet {..}
   = do
@@ -1834,7 +1855,7 @@ outerGet
    . MessageIdC get
   => SharedState
   -> Device
-  -> (SharedState -> Packet (StateReply get) -> SockAddr -> BSL.ByteString -> IO ())
+  -> (SharedState -> Packet (StateReply get) SingleTagged -> SockAddr -> BSL.ByteString -> IO ())
   -> IO ()
 outerGet ss d cb
   = do
@@ -1878,41 +1899,43 @@ type MessageIdC c
 
 newDiscoveryPacket
   :: SharedState
-  -> (SharedState -> Packet StateService -> SockAddr -> BSL.ByteString -> IO ())
-  -> IO (Packet GetService)
+  -> (SharedState -> Packet StateService SingleTagged -> SockAddr -> BSL.ByteString -> IO ())
+  -> IO (Packet GetService AllTagged)
 newDiscoveryPacket ss@(SharedState {..}) runCb
   = do
   pp <- newPacket ss runCb
     $ \p@(Packet {..}) ->
       let
         f = pFrame
-        pFrame' = f { fTagged = AllTagged }
+        fa = pFrameAddress
+        pFrame' = f { fTagged = SAllTagged }
+        pFrameAddress' = fa { faTarget = UnusedMac $ Mac ((), (), (), (), (), ()) }
       in
-        p { pFrame = pFrame' }
+        Packet { pFrame = pFrame', pFrameAddress = pFrameAddress', pProtocolHeader, pPayload }
   pure $ pp GetService
 
 newPacket'
   :: forall a
    . ( MessageIdC a )
   => SharedState
-  -> (SharedState -> Packet (StateReply a) -> SockAddr -> BSL.ByteString -> IO ())
-  -> IO (a -> Packet a)
+  -> (SharedState -> Packet (StateReply a) SingleTagged -> SockAddr -> BSL.ByteString -> IO ())
+  -> IO (a -> Packet a SingleTagged)
 newPacket' ss@(SharedState {..}) runCb
   = newPacket ss runCb id
 
 newPacket
-  :: forall a
+  :: forall a t t'
    . ( MessageIdC a )
   => SharedState
-  -> (SharedState -> Packet (StateReply a) -> SockAddr -> BSL.ByteString -> IO ())
-  -> (Packet a -> Packet a)
-  -> IO (a -> Packet a)
+  -> (SharedState -> Packet (StateReply a) t' -> SockAddr -> BSL.ByteString -> IO ())
+  -> (Packet a SingleTagged -> Packet a t)
+  -> IO (a -> Packet a t)
 newPacket ss@(SharedState {..}) runCb modify
   = do
   nextSeq <- ssNextSeq
   setCallbackForSeq ss nextSeq $ CallbackWrap decodePacket runCb
   pure $ modify . mkPacket
-    SingleTagged
+    SSingleTagged
     uniqueSource
     (word64leToTarget 0)
     NoAckRequired
@@ -1983,7 +2006,7 @@ mkState
   pure $ AppState sharedState asReceiveThread asDiscoveryThread
 
 
-instance Binary a => Binary (Packet a) where
+instance Binary a => Binary (Packet a t) where
   put Packet {..}
     = do
     Bin.put pFrame
@@ -2003,27 +2026,27 @@ packetFromHeader
   :: ( Binary a
      , WithSize a
      )
-  => Header
+  => Header t
   -> a
-  -> Packet a
+  -> Packet a t
 packetFromHeader Header {..} payload
   = Packet hFrame hFrameAddress hProtocolHeader payload
 
 mkTestFrame
   :: WithSize a
-  => Packet a
-  -> Tagged
+  => Packet a t
+  -> STagged t
   -> UniqueSource
-  -> Frame
+  -> Frame t
 mkTestFrame par tag
   = Frame (size par) 0 tag HasFrameAddress 1024
 
 mkTestFrameAddress
-  :: Target
+  :: TargetVal t
   -> AckRequired
   -> ResRequired
   -> Sequence
-  -> FrameAddress
+  -> FrameAddress (TargetVal t)
 mkTestFrameAddress tar
   = FrameAddress tar (UnusedMac $ Mac ((), (), (), (), (), ())) ()
 
@@ -2037,15 +2060,15 @@ mkTestPacket
   :: ( WithSize a
      , Binary a
      )
-  => Tagged
+  => STagged t
   -> UniqueSource
-  -> Target
+  -> TargetVal t
   -> AckRequired
   -> ResRequired
   -> Sequence
   -> Direction
   -> a
-  -> Packet a
+  -> Packet a t
 mkTestPacket tag src tar ack res sequ typ pay
   =
   let
