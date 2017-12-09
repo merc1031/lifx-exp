@@ -1744,6 +1744,7 @@ getGroup ss d
   let
     StateGroup {..} = pPayload
   printIt $ "Got Group: " <> show p
+  updateGroup ss d p
 
 updateLabel
   :: SharedState
@@ -1769,6 +1770,7 @@ getLabel ss d
   let
     StateLabel {..} = pPayload
   printIt $ "Got Label: " <> show p
+  updateLabel ss d p
 
 updateLightPower
   :: SharedState
@@ -1794,6 +1796,7 @@ getLightPower ss d
   let
     StateLightPower {..} = pPayload
   printIt $ "Got LightPower: " <> show p
+  updateLightPower ss d p
 
 updateLight
   :: SharedState
@@ -1828,6 +1831,7 @@ getLight ss d
   let
     StateLight {..} = pPayload
   printIt $ "Got Light: " <> show p
+  updateLight ss d p
 
 outerGet
   :: forall get

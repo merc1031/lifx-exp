@@ -59,7 +59,7 @@ main = do
   threadDelay 3000000
 
   cached <- listCached (asSharedState r)
-  pprint cached
+  pPrint cached
 
   resR <- waitCatch $ asReceiveThread r
   resD <- waitCatch $ asDiscoveryThread r
