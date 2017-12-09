@@ -410,11 +410,11 @@ data HSBK
   deriving (Show, Eq)
 
 -- | 32 bytes
-newtype Label
+newtype Label (l :: Symbol)
   = Label { unLabel :: TL.Text }
   deriving (Show, Eq)
 
-instance Binary Label where
+instance Binary (Label n) where
   put
     = Bin.put . unLabel
   get
@@ -462,7 +462,7 @@ data DeviceMessage
   | SetPowerMessage
   | GetLabelMessage
   | SetLabelMessage
-  -- Version
+  | GetVersionMessage
   | GetInfoMessage
   | GetLocationMessage
   | SetLocationMessage
@@ -508,7 +508,7 @@ data DeviceReply
   -- WifiFirmware
   | StatePowerReply
   | StateLabelReply
-  -- Version
+  | StateVersionReply
   | StateInfoReply
   | AcknowledgementReply
   | StateLocationReply
@@ -557,6 +557,7 @@ messageTypeToWord16le
     SetPowerMessage -> 21
     GetLabelMessage -> 23
     SetLabelMessage -> 24
+    GetVersionMessage -> 32
     GetInfoMessage -> 34
     GetLocationMessage -> 48
     SetLocationMessage -> 49
@@ -586,6 +587,8 @@ word16leToReplyType 22
   = Right $ DeviceReplyType StatePowerReply
 word16leToReplyType 25
   = Right $ DeviceReplyType StateLabelReply
+word16leToReplyType 33
+  = Right $ DeviceReplyType StateVersionReply
 word16leToReplyType 35
   = Right $ DeviceReplyType StateInfoReply
 word16leToReplyType 45
@@ -702,7 +705,7 @@ instance Binary LifxUTC where
 data StateLocation
   = StateLocation
   { stlLocation :: LocationId
-  , stlLabel :: Label
+  , stlLabel :: Label "location"
   , stlUpdatedAt :: LifxUTC
   }
   deriving Show
@@ -802,7 +805,7 @@ data StateLight
   { stliColor :: HSBK
   , stliReserved :: Int16
   , stliPower :: LightPower
-  , stliLabel :: Label
+  , stliLabel :: Label "name"
   , stliReserved2 :: Word64le
   }
   deriving Show
@@ -862,7 +865,7 @@ instance MessageId GetLabel where
 
 newtype StateLabel
   = StateLabel
-  { stlaLabel :: Label
+  { stlaLabel :: Label "name"
   }
   deriving Show
 
@@ -879,6 +882,168 @@ instance WithSize StateLabel where
     = const 256
 
 instance WithSize GetLabel where
+  size
+    = const 0
+
+data GetVersion
+  = GetVersion
+  deriving Show
+
+instance Binary GetVersion where
+  put
+    = const $ pure ()
+  get
+    = pure GetVersion
+
+instance MessageId GetVersion where
+  type StateReply GetVersion = StateVersion
+  msgCons = GetVersion
+  msgId = const 32
+  msgTyp = const $ DeviceMessageType GetVersionMessage
+
+newtype VendorId
+  = VendorId Word32le
+  deriving (Show, Eq, Binary)
+
+newtype HardwareVersion
+  = HardwareVersion Word32le
+  deriving (Show, Eq, Binary)
+
+-- 1 1 Original 1000 Yes No No
+-- 1 3 Color 650 Yes No No
+-- 1 10 White 800 (Low Voltage) No No No
+-- 1 11 White 800 (High Voltage) No No No
+-- 1 18 White 900 BR30 (Low Voltage) No No No
+-- 1 20 Color 1000 BR30 Yes No No
+-- 1 22 Color 1000 Yes No No
+-- 1 27 LIFX A19 Yes No No
+-- 1 28 LIFX BR30 Yes No No
+-- 1 29 LIFX+ A19 Yes Yes No
+-- 1 30 LIFX+ BR30 Yes Yes No
+-- 1 31 LIFX Z Yes No Yes
+-- 1 32 LIFX Z 2 Yes No Yes
+-- 1 36 LIFX Downlight Yes No No
+-- 1 37 LIFX Downlight Yes No No
+-- 1 43 LIFX A19 Yes No No
+-- 1 44 LIFX BR30 Yes No No
+-- 1 45 LIFX+ A19 Yes Yes No
+-- 1 46 LIFX+ BR30 Yes Yes No
+-- 1 49 LIFX Mini Yes No No
+-- 1 50 LIFX Mini Day and Dusk No No No
+-- 1 51 LIFX Mini White No No No
+-- 1 52 LIFX GU10 Yes No No
+data ProductId
+  = Original1000
+  | Color650
+  | White800lv
+  | White800hv
+  | White900BR30lv
+  | Color1000BR30
+  | Color1000
+  | LIFXA19
+  | LIFXBR30
+  | LIFXPA19
+  | LIFXPBR30
+  | LIFXZ
+  | LIFXZ2
+  | LIFXDownlight
+  | LIFXDownlight_
+  | LIFXA19_
+  | LIFXBR30_
+  | LIFXPA19_
+  | LIFXPBR30_
+  | LIFXMini
+  | LIFXMiniDaD
+  | LIFXMiniWhite
+  | LIFXGU10
+  deriving (Show, Eq)
+
+instance Binary ProductId where
+  put = \case
+    Original1000 -> putWord32le 1
+    Color650 -> putWord32le 3
+    White800lv -> putWord32le 10
+    White800hv -> putWord32le 11
+    White900BR30lv -> putWord32le 18
+    Color1000BR30 -> putWord32le 20
+    Color1000 -> putWord32le 22
+    LIFXA19 -> putWord32le 27
+    LIFXBR30 -> putWord32le 28
+    LIFXPA19 -> putWord32le 29
+    LIFXPBR30 -> putWord32le 30
+    LIFXZ -> putWord32le 31
+    LIFXZ2 -> putWord32le 32
+    LIFXDownlight -> putWord32le 36
+    LIFXDownlight_ -> putWord32le 37
+    LIFXA19_ -> putWord32le 43
+    LIFXBR30_ -> putWord32le 44
+    LIFXPA19_ -> putWord32le 45
+    LIFXPBR30_ -> putWord32le 46
+    LIFXMini -> putWord32le 49
+    LIFXMiniDaD -> putWord32le 50
+    LIFXMiniWhite -> putWord32le 51
+    LIFXGU10 -> putWord32le 52
+    where
+      putWord32le
+        :: Word32le
+        -> Put
+      putWord32le = Bin.put
+  get = maybe (fail "not a known product") (pure) =<< (getWord32le <$> Bin.get)
+    where
+      getWord32le
+        :: Word32le
+        -> Maybe ProductId
+      getWord32le = \case
+        1 -> Just Original1000
+        3 -> Just Color650
+        10 -> Just White800lv
+        11 -> Just White800hv
+        18 -> Just White900BR30lv
+        20 -> Just Color1000BR30
+        22 -> Just Color1000
+        27 -> Just LIFXA19
+        28 -> Just LIFXBR30
+        29 -> Just LIFXPA19
+        30 -> Just LIFXPBR30
+        31 -> Just LIFXZ
+        32 -> Just LIFXZ2
+        36 -> Just LIFXDownlight
+        37 -> Just LIFXDownlight_
+        43 -> Just LIFXA19_
+        44 -> Just LIFXBR30_
+        45 -> Just LIFXPA19_
+        46 -> Just LIFXPBR30_
+        49 -> Just LIFXMini
+        50 -> Just LIFXMiniDaD
+        51 -> Just LIFXMiniWhite
+        52 -> Just LIFXGU10
+        _ -> Nothing
+
+
+data StateVersion
+  = StateVersion
+  { stvVendor :: VendorId
+  , stvProduct :: ProductId
+  , stvVersion :: HardwareVersion
+  }
+  deriving Show
+
+instance Binary StateVersion where
+  put StateVersion {..} = do
+    Bin.put stvVendor
+    Bin.put stvProduct
+    Bin.put stvVersion
+  get = do
+    stvVendor <- Bin.get
+    stvProduct <- Bin.get
+    stvVersion <- Bin.get
+    pure $ StateVersion {..}
+
+instance WithSize StateVersion where
+  size
+    = const 12
+
+instance WithSize GetVersion where
   size
     = const 0
 
@@ -911,7 +1076,7 @@ instance MessageId GetGroup where
 data StateGroup
   = StateGroup
   { stgGroup :: GroupId
-  , stgLabel :: Label
+  , stgLabel :: Label "group"
   , stgUpdatedAt :: LifxUTC
   }
   deriving Show
@@ -959,7 +1124,7 @@ instance Binary StatePower where
 
 data SetLabel
   = SetLabel
-  { selLabel :: !Label }
+  { selLabel :: !(Label "name") }
   deriving Show
 
 instance Binary SetLabel where
@@ -973,7 +1138,7 @@ data State
   { sColor :: !HSBK
   , sReserved :: !Int16le
   , sPower :: !Word16le
-  , sLabel :: !Label
+  , sLabel :: !(Label "name")
   , sReserved2 :: !Word64le
   }
   deriving Show
@@ -1475,11 +1640,12 @@ data SharedState
 data Light
   = Light
   { lDevice :: Device
-  , lGroup :: Maybe GroupId
-  , lLocation :: Maybe LocationId
-  , lLabel :: Maybe Label
+  , lGroup :: Maybe (Label "group")
+  , lLocation :: Maybe (Label "location")
+  , lLabel :: Maybe (Label "name")
   , lColor :: Maybe HSBK
   , lPower :: Maybe LightPower
+  , lProduct :: Maybe ProductId
   }
   deriving (Show, Eq)
 
@@ -1667,11 +1833,11 @@ onStateService ss@(SharedState {..}) Packet {..} sa _orig
           if (lDevice l /= incomingDevice && False)
           then do
             --writeTVar ssDevices $ HM.insert (dDeviceId incomingDevice) (Light incomingDevice Nothing Nothing Nothing Nothing Nothing) devs
-            pure $ map (flip uncurry (ss, incomingDevice)) [getLocation, getGroup, getLabel, getLightPower, getLight]
+            pure $ map (flip uncurry (ss, incomingDevice)) [getLocation, getGroup, getLabel, getLightPower, getLight, getVersion]
           else pure []
         Nothing -> do
-          writeTVar ssDevices $ HM.insert (dDeviceId incomingDevice) (Light incomingDevice Nothing Nothing Nothing Nothing Nothing) devs
-          pure $ map (flip uncurry (ss, incomingDevice)) [getLocation, getGroup, getLabel, getLightPower, getLight]
+          writeTVar ssDevices $ HM.insert (dDeviceId incomingDevice) (Light incomingDevice Nothing Nothing Nothing Nothing Nothing Nothing) devs
+          pure $ map (flip uncurry (ss, incomingDevice)) [getLocation, getGroup, getLabel, getLightPower, getLight, getVersion]
 
     sequence_ moreInfo
   where
@@ -1691,6 +1857,34 @@ sendToDevice SharedState {..} d@(Device {..}) packet
     DeviceSocketAddress p (DeviceAddress (unWord32le -> w)) = dAddr
     bytes = Bin.encode packet
 
+updateVersion
+  :: SharedState
+  -> Device
+  -> Packet StateVersion
+  -> IO ()
+updateVersion SharedState {..} Device {..} Packet {..}
+  = do
+  atomically $ do
+    devs <- readTVar ssDevices
+    let
+      newDevs = HM.adjust (\l@(Light {..}) -> l { lProduct = Just stvProduct } ) dDeviceId devs
+    writeTVar ssDevices newDevs
+  where
+    StateVersion {..} = pPayload
+
+
+getVersion
+  :: SharedState
+  -> Device
+  -> IO ()
+getVersion ss d
+  = do
+  outerGet ss d $ \_ p@(Packet {..}) _ _ -> do
+    let
+      StateVersion {..} = pPayload
+    printIt $ "Got version: " <> show p
+    updateVersion ss d p
+
 updateLocation
   :: SharedState
   -> Device
@@ -1701,7 +1895,7 @@ updateLocation SharedState {..} Device {..} Packet {..}
   atomically $ do
     devs <- readTVar ssDevices
     let
-      newDevs = HM.adjust (\l@(Light {..}) -> l { lLocation = Just stlLocation } ) dDeviceId devs
+      newDevs = HM.adjust (\l@(Light {..}) -> l { lLocation = Just stlLabel } ) dDeviceId devs
     writeTVar ssDevices newDevs
   where
     StateLocation {..} = pPayload
@@ -1730,7 +1924,7 @@ updateGroup SharedState {..} Device {..} Packet {..}
   atomically $ do
     devs <- readTVar ssDevices
     let
-      newDevs = HM.adjust (\l@(Light {..}) -> l { lGroup = Just stgGroup } ) dDeviceId devs
+      newDevs = HM.adjust (\l@(Light {..}) -> l { lGroup = Just stgLabel } ) dDeviceId devs
     writeTVar ssDevices newDevs
   where
     StateGroup {..} = pPayload
