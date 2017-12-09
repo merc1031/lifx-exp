@@ -39,6 +39,7 @@ library
                       , deepseq-generics
                       , unordered-containers
                       , QuickCheck
+                      , singletons
   default-language:    Haskell2010
   ghc-options: -Wall -Werror
 

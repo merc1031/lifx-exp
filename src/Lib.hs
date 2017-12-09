@@ -77,6 +77,7 @@ import            Data.Int                      ( Int8
                                                 , Int64
                                                 )
 import            Data.Monoid                   ( (<>) )
+import            Data.Singletons
 import            Data.Proxy
 import            Data.Word                     ( Word8
                                                 , Word16
@@ -269,6 +270,12 @@ taggedToBool SingleTagged
 taggedToBool AllTagged
   = True
 
+--staggedToBool
+--  :: STagged t
+--  -> Bool
+--staggedToBool SSingleTagged = False
+--staggedToBool SAllTagged = True
+
 addressableToBool
   :: Addressable
   -> Bool
@@ -300,6 +307,15 @@ boolToTagged False
   = SingleTagged
 boolToTagged True
   = AllTagged
+
+--boolToSTagged
+--  :: Bool
+--  -> STagged t
+--boolToSTagged False
+----boolToSTagged False
+----  = SSingleTagged
+----boolToSTagged True
+----  = SAllTagged
 
 boolToAddressable
   :: Bool
@@ -337,6 +353,21 @@ listCached
 listCached SharedState {..}
   = HM.elems <$> (atomically $ readTVar ssDevices)
 
+data RawFrame
+  = RawFrame
+  { rfSize :: !Word16le
+  , rfOrigin :: !Word8 -- 0
+  , rfTagged :: !Tagged
+  , rfAddressable :: !Addressable -- 1
+  , rfProtocol :: !Word16le -- 1024
+  , rfSource :: !UniqueSource
+  }
+  deriving (Show, Eq, Generic)
+
+instance NFData RawFrame where
+  rnf
+    = genericRnfV1
+
 -- Layout in bits:   16|2|1|1|12|32
 --                   ui|ui|b|b|ui|ui
 data Frame t
@@ -350,10 +381,24 @@ data Frame t
   }
   deriving (Show, Eq, Generic)
 
-instance NFData (Frame t) where
+instance NFData (STagged t) => NFData (Frame t) where
   rnf
     = genericRnfV1
 
+data RawFrameAddress
+  = RawFrameAddress
+  { rfaTarget :: !Target
+  , rfaReserved :: !UnusedMac -- 0
+  , rfaReserved2 :: !()
+  , rfaAckRequired :: !AckRequired
+  , rfaResRequired :: !ResRequired
+  , rfaSequence :: !Sequence
+  }
+  deriving (Show, Eq, Generic)
+
+instance NFData RawFrameAddress where
+  rnf
+    = genericRnfV1
 
 -- Layout in bits:   64|48|6|1|1|8
 --                   ui|ui|r|b|b|ui
@@ -369,7 +414,7 @@ data FrameAddress t
   }
   deriving (Show, Eq, Generic)
 
-instance NFData (FrameAddress t) where
+instance NFData t => NFData (FrameAddress t) where
   rnf
     = genericRnfV1
 
@@ -408,8 +453,8 @@ data Packet a t
   , pPayload :: a
   }
 
-deriving instance (Show (TargetVal t)) => Show (Packet a t)
-deriving instance (Eq (TargetVal t)) => Eq (Packet a t)
+deriving instance (Show (TargetVal t), Show a) => Show (Packet a t)
+deriving instance (Eq (TargetVal t), Eq a) => Eq (Packet a t)
 
 -- Layout in bits:   16|16|16|16
 --                   ui|ui|ui|ui
@@ -1226,6 +1271,26 @@ instance Binary Sequence where
   get
     = Sequence <$> BinG.getWord8
 
+data family Sing (x :: k)
+
+data instance Sing (b :: Tagged) where
+  SiSingleTagged :: Sing SingleTagged
+  SiAllTagged :: Sing AllTagged
+
+class SingI (x :: k) where
+   sing :: Sing x
+
+instance SingI SingleTagged  where sing = SiSingleTagged
+instance SingI AllTagged where sing = SiAllTagged
+
+staggedToBool
+  :: forall (t :: Tagged)
+   . Bool
+staggedToBool = go (singI @t)
+  where
+    go SiSingleTagged = False
+    go SiAllTagged = True
+
 instance Binary (Frame t) where
   put f@Frame {..}
     = do
@@ -1241,11 +1306,34 @@ instance Binary (Frame t) where
       fProtocol = extract frame2ndByte 0 11
       fOrigin = extract frame2ndByte 14 16
       fAddressable = boolToAddressable $ testBit frame2ndByte 12
-      fTagged = boolToTagged $ testBit frame2ndByte 13
+      fTagged = case (testBit frame2ndByte 13, staggedToBool @t) of
+        (False, False) -> 
 
 
     fSource <- Bin.get
     pure Frame {..}
+
+instance Binary RawFrame where
+  put f@RawFrame {..}
+    = do
+    Bin.put rfSize -- Discovered from size of rest
+    putRawFrame2ndByte f
+    Bin.put rfSource
+
+  get
+    = do
+    rfSize <- Bin.get
+    rframe2ndByte <- Bin.get @Word16le
+    let
+      rfProtocol = extract rframe2ndByte 0 11
+      rfOrigin = extract rframe2ndByte 14 16
+      rfAddressable = boolToAddressable $ testBit rframe2ndByte 12
+      rfTagged = boolToTagged $ testBit rframe2ndByte 13
+
+
+    rfSource <- Bin.get
+    pure RawFrame {..}
+
 
 -- | Cutting out from M to N becomes a two-step process: you shift the original value M bits to the right, and then perform a bit-wise AND with the mask of N-M ones.
 extract
@@ -1285,10 +1373,20 @@ putFrame2ndByte Frame {..}
   = Bin.put @Word16le $
   (fProtocol `shiftL` 0) +
   (bool 0 1 (addressableToBool fAddressable) `shiftL` 12) +
-  (bool 0 1 (taggedToBool fTagged) `shiftL` 13) +
+  (bool 0 1 (staggedToBool fTagged) `shiftL` 13) +
   fromIntegral (fOrigin `shiftL` 14)
 
-instance Binary (FrameAddress t) where
+putRawFrame2ndByte
+  :: RawFrame
+  -> Put
+putRawFrame2ndByte RawFrame {..}
+  = Bin.put @Word16le $
+  (rfProtocol `shiftL` 0) +
+  (bool 0 1 (addressableToBool rfAddressable) `shiftL` 12) +
+  (bool 0 1 (taggedToBool rfTagged) `shiftL` 13) +
+  fromIntegral (rfOrigin `shiftL` 14)
+
+instance Binary t => Binary (FrameAddress t) where
   put _f@FrameAddress {..}
     = do
     Bin.put faTarget
@@ -1312,6 +1410,31 @@ instance Binary (FrameAddress t) where
       faAckRequired = boolToAckRequired $ testBit frameAddress15thByte 1
     faSequence <- Bin.get
     pure FrameAddress {..}
+
+instance Binary RawFrameAddress where
+  put _f@RawFrameAddress {..}
+    = do
+    Bin.put rfaTarget
+    Bin.put rfaReserved
+    BinP.putWord8 $
+      (bool 0 1 (resRequiredToBool rfaResRequired) `shiftL` 0) +
+      (bool 0 1 (ackRequiredToBool rfaAckRequired) `shiftL` 1) +
+      (0 `shiftL` 2)
+    Bin.put rfaSequence
+
+  get
+    = do
+    rfaTarget <- Bin.get
+    rfaReserved <- Bin.get
+    rframeAddress15thByte <- BinG.getWord8
+    let
+      _rfaReserved2 :: Word8
+      _rfaReserved2 = extract rframeAddress15thByte 2 7
+      rfaReserved2 = ()
+      rfaResRequired = boolToResRequired $ testBit rframeAddress15thByte 0
+      rfaAckRequired = boolToAckRequired $ testBit rframeAddress15thByte 1
+    rfaSequence <- Bin.get
+    pure RawFrameAddress {..}
 
 instance Binary UnusedMac where
   put _
@@ -1395,7 +1518,7 @@ instance Binary StateService where
     ssPort <- Bin.get
     pure StateService {..}
 
-instance Binary (Header t) where
+instance (Binary (TargetVal t)) => Binary (Header t) where
   put Header {..}
     = do
     Bin.put hFrame
@@ -1408,6 +1531,20 @@ instance Binary (Header t) where
     hFrameAddress <- Bin.get
     hProtocolHeader <- Bin.get
     pure Header {..}
+
+instance Binary RawHeader where
+  put RawHeader {..}
+    = do
+    Bin.put rhFrame
+    Bin.put rhFrameAddress
+    Bin.put rhProtocolHeader
+
+  get
+    = do
+    rhFrame <- Bin.get
+    rhFrameAddress <- Bin.get
+    rhProtocolHeader <- Bin.get
+    pure RawHeader {..}
 
 -- size
 -- origin
@@ -1427,6 +1564,19 @@ instance Binary (Header t) where
 -- 16|2|1|1|12|32|64|48|6|1|1|8|64|16|16
 -- ui|ui|b|b|ui|ui|ui|ui|r|b|b|ui|ui|ui|r
 --                   [6]
+
+data RawHeader
+  = RawHeader
+  { rhFrame :: !(RawFrame)
+  , rhFrameAddress :: !(RawFrameAddress)
+  , rhProtocolHeader :: !ProtocolHeader
+  }
+  deriving (Show, Eq, Generic)
+
+instance NFData RawHeader where
+  rnf
+    = genericRnfV1
+
 data Header (t :: Tagged)
   = Header
   { hFrame :: !(Frame t)
@@ -1437,7 +1587,7 @@ data Header (t :: Tagged)
 
 deriving instance (Show (TargetVal t)) => Show (Header t)
 
-instance NFData (Header t) where
+instance (NFData (STagged t), NFData (TargetVal t)) => NFData (Header t) where
   rnf
     = genericRnfV1
 
@@ -1568,7 +1718,7 @@ data Device
   }
   deriving (Show, Eq)
 
-data HeaderDecodeError
+data RawHeaderDecodeError
   = NotAHeader
   { hdeError :: !String
   , hdeOrig :: !BSL.ByteString
@@ -1576,13 +1726,13 @@ data HeaderDecodeError
   , hdeOffset :: !BinG.ByteOffset
   }
   | ImproperSourceInHeader
-  { hdeHeader :: !SomeHeader
+  { hdeHeader :: !RawHeader
   , hdeOrig :: !BSL.ByteString
   , hdeRemaining :: !BSL.ByteString
   , hdeOffset :: !BinG.ByteOffset
   }
   | ImproperSizeInHeader
-  { hdeHeader :: !SomeHeader
+  { hdeHeader :: !RawHeader
   , hdeOrig :: !BSL.ByteString
   , hdeRemaining :: !BSL.ByteString
   , hdeOffset :: !BinG.ByteOffset
@@ -1593,11 +1743,11 @@ instance Show SomeHeader where
   show (SomeHeader h) = show h
 
 data SomeHeader
-  = forall t. SomeHeader (Header t)
+  = forall t. Show (TargetVal t) => SomeHeader (Header t)
 
-instance Exception HeaderDecodeError
+instance Exception RawHeaderDecodeError
 
-instance NFData HeaderDecodeError where
+instance NFData RawHeaderDecodeError where
   rnf
     = genericRnfV1
 
@@ -1612,26 +1762,51 @@ data PayloadDecodeError
   deriving Show
 
 
-decodeHeader
+decodeRawHeader
   :: BSL.ByteString
-  -> Except HeaderDecodeError (Header t, BSL.ByteString)
-decodeHeader bs
+  -> Except RawHeaderDecodeError (RawHeader, BSL.ByteString)
+decodeRawHeader bs
   = case Bin.decodeOrFail bs of
   Left (str, offset, err) ->
     throwE $ NotAHeader err bs str offset
   Right (rema, cons, hdr) -> do
     let
-      packetSize = fSize $ hFrame hdr
-      packetSource = fSource $ hFrame hdr
+      packetSize = rfSize $ rhFrame hdr
+      packetSource = rfSource $ rhFrame hdr
     when (packetSize /= fromIntegral (BSL.length bs))
       $ throwE $ ImproperSizeInHeader hdr bs rema cons
     when (packetSource /= uniqueSource)
       $ throwE $ ImproperSourceInHeader hdr bs rema cons
     pure (hdr, rema)
 
+--decodeHeader
+--  :: Binary (TargetVal t)
+--  => BSL.ByteString
+--  -> Except HeaderDecodeError (Header t, BSL.ByteString)
+--decodeHeader bs
+--  = case Bin.decodeOrFail bs of
+--  Left (str, offset, err) ->
+--    throwE $ NotAHeader err bs str offset
+--  Right (rema, cons, hdr) -> do
+--    let
+--      packetSize = fSize $ hFrame hdr
+--      packetSource = fSource $ hFrame hdr
+--    when (packetSize /= fromIntegral (BSL.length bs))
+--      $ throwE $ ImproperSizeInHeader (SomeHeader hdr) bs rema cons
+--    when (packetSource /= uniqueSource)
+--      $ throwE $ ImproperSourceInHeader (SomeHeader hdr) bs rema cons
+--    pure (hdr, rema)
+
+rawHeaderToHeader
+  :: RawHeader
+  -> Maybe (Header t)
+rawHeaderToHeader
+  = undefined
+
 decodePacket
   :: ( Binary a
      , WithSize a
+     , Show (TargetVal t)
      )
   => Header t
   -> BSL.ByteString
@@ -1639,7 +1814,7 @@ decodePacket
 decodePacket hdr rema
   = case Bin.decodeOrFail rema of
   Left (str, offset, err) ->
-    throwE $ PayloadDecodeFailed hdr rema str offset err
+    throwE $ PayloadDecodeFailed (SomeHeader hdr) rema str offset err
   Right (_, _, payload) ->
     pure $ packetFromHeader hdr payload
 
@@ -1656,16 +1831,35 @@ receiveThread ss@SharedState {..}
   (!bs, sa) <- recvFrom ssSocket 1500
   let
     bsl = BSL.fromStrict bs
-    headerE = runExcept $ decodeHeader bsl
+    headerE = runExcept $ decodeRawHeader bsl
 
   forM_ headerE $ \(header, rest) -> async $ do
     let
-      Sequence sequ = faSequence $ hFrameAddress header
+      Sequence sequ = rfaSequence $ rhFrameAddress header
     cb <- atomically $ readArray ssReplyCallbacks sequ
     case cb of
-      CallbackWrap {..} -> do
+      CallbackWrap {..} -> cbWrap header rest bsl sa runDecode runCallback
+      -- do
+        --let
+        --  payloadE = runExcept $ runDecode header rest
+        --forM_ payloadE $ \payload ->
+        --  runCallback ss payload sa bsl
+  where
+    cbWrap
+      :: RawHeader
+      -> BSL.ByteString -- rest
+      -> BSL.ByteString -- TODO disambiguate -- orig
+      -> SockAddr
+      -> (Header t -> BSL.ByteString -> Except PayloadDecodeError (Packet a t))
+      -> (Callback a t)
+      -> IO ()
+    cbWrap h rest bsl sa runDecode runCallback
+      = do
+      let
+        mH = rawHeaderToHeader h
+      forM_ mH $ \th -> do
         let
-          payloadE = runExcept $ runDecode header rest
+          payloadE = runExcept $ runDecode th rest
         forM_ payloadE $ \payload ->
           runCallback ss payload sa bsl
 
@@ -1925,7 +2119,10 @@ newPacket' ss@(SharedState {..}) runCb
 
 newPacket
   :: forall a t t'
-   . ( MessageIdC a )
+   . ( MessageIdC a
+     , Show (TargetVal t)
+     , Show (TargetVal t')
+     )
   => SharedState
   -> (SharedState -> Packet (StateReply a) t' -> SockAddr -> BSL.ByteString -> IO ())
   -> (Packet a SingleTagged -> Packet a t)
@@ -2006,7 +2203,7 @@ mkState
   pure $ AppState sharedState asReceiveThread asDiscoveryThread
 
 
-instance Binary a => Binary (Packet a t) where
+instance (Binary (TargetVal t), Binary a) => Binary (Packet a t) where
   put Packet {..}
     = do
     Bin.put pFrame
