@@ -34,6 +34,7 @@ import            Control.Concurrent.STM
 import            Control.Concurrent.STM.TQueue
 import            Control.DeepSeq
 import            Control.DeepSeq.Generics
+import            Data.Void
 import            GHC.Generics
 import            Control.Exception
 import            Control.Monad                 ( forM_
@@ -66,7 +67,7 @@ import            Data.Bits                     ( zeroBits
                                                 , testBit
                                                 )
 import            Data.Bool                     ( bool )
-import            Data.Char                     ( intToDigit )
+import            Data.Char                     ( intToDigit, isPrint )
 import            Data.Coerce
 import            Data.Functor.Identity         ( Identity )
 import            Data.Hashable                 ( Hashable )
@@ -414,11 +415,16 @@ newtype Label (l :: Symbol)
   = Label { unLabel :: TL.Text }
   deriving (Show, Eq)
 
+mkLabel
+  :: TL.Text
+  -> Label n
+mkLabel = Label . TL.dropAround (not . isPrint) . TL.strip
+
 instance Binary (Label n) where
   put
     = Bin.put . unLabel
   get
-    = (Label . TLE.decodeUtf8) <$> BinG.getLazyByteString 32
+    = (mkLabel . TLE.decodeUtf8) <$> BinG.getLazyByteString 32
 
 data Direction
   = Request MessageType
@@ -616,9 +622,7 @@ word16leToReplyType x
   = Left $ "no case for " <> show x
 
 class MessageId a where
-  type StateReply a = s | s -> a
-
-  msgCons :: a
+  type StateReply a
 
   msgId :: a -> Word16le
   msgId _ = msgIdP (Proxy :: Proxy a)
@@ -632,6 +636,85 @@ class MessageId a where
 
   msgTypP :: Proxy a -> MessageType
   msgTypP _ = msgTyp @a undefined
+
+
+--type family MessageId2 st = p | p -> st where
+--  MessageId2 StateLight = (GetLight, Void)
+--  MessageId2 StateLightPower = (GetLightPower, SetLightPower)
+--
+--
+--type family In n h where
+--  In n (n, r) = True
+--  In n (r, n) = True
+--
+--type family GetP h where
+--  GetP (n, r) = n
+--
+--type family SetP h where
+--  SetP (r, Void) = Void
+--  SetP (r, n) = n
+--
+--
+--data SrcP
+--  = GetPacket
+--  | SetPacket
+--
+--type family Ps srcp tpl where
+--  Ps GetPacket (g,s) = g
+--  Ps SetPacket (g,s) = s
+--
+--outerGetT
+--  :: forall get res g
+--   . 
+--   ( res ~ MessageId2 get
+--     , g ~ GetP res
+--     )
+--  => SharedState
+--  -> Device
+--  -> (SharedState -> Packet get -> SockAddr -> BSL.ByteString -> IO ())
+--  -> IO ()
+--outerGetT ss d cb
+--  = do
+--  p <- newPacket' ss cb
+--  let
+--    fp = p @g msgCons
+--    np = fp { pFrameAddress = (pFrameAddress fp) { faTarget = deviceIdToTarget $ dDeviceId d} }
+--  sendToDevice ss d np
+--
+--
+--newPacketT' ss@(SharedState {..}) runCb
+--  = newPacket ss runCb id
+--
+--newPacketT
+--  :: forall get
+--   .  ()
+--  => SharedState
+--  -> (SharedState -> Packet get -> SockAddr -> BSL.ByteString -> IO ())
+--  -> (Packet a -> Packet a)
+--  -> IO (a -> Packet a)
+--newPacketT ss@(SharedState {..}) runCb modify
+--  = do
+--  nextSeq <- ssNextSeq
+--  setCallbackForSeq ss nextSeq $ CallbackWrap decodePacket runCb
+--  pure $ modify . mkPacket
+--    SingleTagged
+--    uniqueSource
+--    (word64leToTarget 0)
+--    NoAckRequired
+--    NoResRequired
+--    nextSeq
+--    (msgTypP (Proxy :: Proxy a))
+
+
+
+
+
+
+
+
+
+
+
 
 
 newtype ByteId16
@@ -688,7 +771,6 @@ instance Binary GetLocation where
 
 instance MessageId GetLocation where
   type StateReply GetLocation = StateLocation
-  msgCons = GetLocation
   msgId = const 48
   msgTyp = const $ DeviceMessageType GetLocationMessage
 
@@ -726,7 +808,7 @@ instance Binary StateLocation where
 
 instance WithSize StateLocation where
   size
-    = const 392
+    = const (16 + 32 + 8)
 
 instance WithSize GetLocation where
   size
@@ -756,7 +838,6 @@ instance Binary GetLightPower where
 
 instance MessageId GetLightPower where
   type StateReply GetLightPower = StateLightPower
-  msgCons = GetLightPower
   msgId = const 116
   msgTyp = const $ LightMessageType GetLightPowerMessage
 
@@ -778,11 +859,39 @@ instance Binary StateLightPower where
 
 instance WithSize StateLightPower where
   size
-    = const 48
+    = const 2
 
 instance WithSize GetLightPower where
   size
     = const 0
+
+data SetLightPower
+  = SetLightPower
+  { slpLevel :: LightPower
+  , slpDuration :: Word32le --ms
+  }
+  deriving Show
+
+instance Binary SetLightPower where
+  put SetLightPower {..}
+    = do
+    Bin.put slpLevel
+    Bin.put slpDuration
+
+  get
+    = do
+    slpLevel <- Bin.get
+    slpDuration <- Bin.get
+    pure $ SetLightPower {..}
+
+instance MessageId SetLightPower where
+  type StateReply SetLightPower = StateLightPower
+  msgId = const 117
+  msgTyp = const $ LightMessageType SetLightPowerMessage
+
+instance WithSize SetLightPower where
+  size
+    = const 6
 
 data GetLight
   = GetLight
@@ -796,7 +905,6 @@ instance Binary GetLight where
 
 instance MessageId GetLight where
   type StateReply GetLight = StateLight
-  msgCons = GetLight
   msgId = const 101
   msgTyp = const $ LightMessageType GetLightMessage
 
@@ -840,7 +948,7 @@ instance Binary StateLight where
 
 instance WithSize StateLight where
   size
-    = const $ size (undefined :: HSBK) + 42
+    = const $ size (undefined :: HSBK) + (2 + 2 + 32 + 8)
 
 instance WithSize GetLight where
   size
@@ -859,7 +967,6 @@ instance Binary GetLabel where
 
 instance MessageId GetLabel where
   type StateReply GetLabel = StateLabel
-  msgCons = GetLabel
   msgId = const 48
   msgTyp = const $ DeviceMessageType GetLabelMessage
 
@@ -879,7 +986,7 @@ instance Binary StateLabel where
 
 instance WithSize StateLabel where
   size
-    = const 256
+    = const 32
 
 instance WithSize GetLabel where
   size
@@ -897,7 +1004,6 @@ instance Binary GetVersion where
 
 instance MessageId GetVersion where
   type StateReply GetVersion = StateVersion
-  msgCons = GetVersion
   msgId = const 32
   msgTyp = const $ DeviceMessageType GetVersionMessage
 
@@ -1069,7 +1175,6 @@ instance Binary GetGroup where
 
 instance MessageId GetGroup where
   type StateReply GetGroup = StateGroup
-  msgCons = GetGroup
   msgId = const 51
   msgTyp = const $ DeviceMessageType GetGroupMessage
 
@@ -1094,7 +1199,7 @@ instance Binary StateGroup where
 
 instance WithSize StateGroup where
   size
-    = const 392
+    = const (16 + 32 + 8)
 
 instance WithSize GetGroup where
   size
@@ -1179,6 +1284,30 @@ data SetColor
   }
   deriving Show
 
+instance Binary SetColor where
+  put _sc@SetColor {..}
+    = do
+    BinP.putWord8 0
+    Bin.put scColor
+    Bin.put scDuration
+
+  get
+    = do
+    scReserved <- () <$ BinG.getWord8
+    scColor <- Bin.get
+    scDuration <- Bin.get
+    pure $ SetColor {..}
+
+instance MessageId SetColor where
+  type StateReply SetColor = StateLight
+  msgId = const 102
+  msgTyp = const $ LightMessageType SetColorMessage
+
+instance WithSize SetColor where
+  size SetColor {..}
+    = 1 + size scColor + 4
+
+
 data GetService
   = GetService
   deriving (Show, Eq)
@@ -1192,7 +1321,6 @@ data StateService
 
 instance MessageId GetService where
   type StateReply GetService = StateService
-  msgCons = GetService
   msgId = const 2
   msgTyp = const $ DeviceMessageType GetServiceMessage
 
@@ -1297,10 +1425,6 @@ instance WithSize FrameAddress where
 instance WithSize ProtocolHeader where
   size
     = const 12
-
-instance WithSize SetColor where
-  size SetColor {..}
-    = 1 + size scColor + 4
 
 instance WithSize HSBK where
   size
@@ -1494,20 +1618,6 @@ instance Binary ProtocolHeader where
     _ <- Bin.get @Word16le
 
     pure ProtocolHeader {phReserved = 0,phReserved2 = (),..}
-
-instance Binary SetColor where
-  put _sc@SetColor {..}
-    = do
-    BinP.putWord8 0
-    Bin.put scColor
-    Bin.put scDuration
-
-  get
-    = do
-    scReserved <- () <$ BinG.getWord8
-    scColor <- Bin.get
-    scDuration <- Bin.get
-    pure $ SetColor {..}
 
 instance Binary HSBK where
   put _hsbk@HSBK {..}
@@ -1879,7 +1989,7 @@ getVersion
   -> IO ()
 getVersion ss d
   = do
-  outerGet ss d $ \_ p@(Packet {..}) _ _ -> do
+  outerGet ss d GetVersion $ \_ p@(Packet {..}) _ _ -> do
     let
       StateVersion {..} = pPayload
     printIt $ "Got version: " <> show p
@@ -1907,7 +2017,7 @@ getLocation
   -> IO ()
 getLocation ss d
   = do
-  outerGet ss d $ \_ p@(Packet {..}) _ _ -> do
+  outerGet ss d GetLocation $ \_ p@(Packet {..}) _ _ -> do
     let
       StateLocation {..} = pPayload
     printIt $ "Got location: " <> show p
@@ -1934,7 +2044,7 @@ getGroup
   -> Device
   -> IO ()
 getGroup ss d
-  = outerGet ss d $ \_ p@(Packet {..}) _ _ -> do
+  = outerGet ss d GetGroup $ \_ p@(Packet {..}) _ _ -> do
   let
     StateGroup {..} = pPayload
   printIt $ "Got Group: " <> show p
@@ -1960,7 +2070,7 @@ getLabel
   -> Device
   -> IO ()
 getLabel ss d
-  = outerGet ss d $ \_ p@(Packet {..}) _ _ -> do
+  = outerGet ss d GetLabel $ \_ p@(Packet {..}) _ _ -> do
   let
     StateLabel {..} = pPayload
   printIt $ "Got Label: " <> show p
@@ -1986,7 +2096,7 @@ getLightPower
   -> Device
   -> IO ()
 getLightPower ss d
-  = outerGet ss d $ \_ p@(Packet {..}) _ _ -> do
+  = outerGet ss d GetLightPower $ \_ p@(Packet {..}) _ _ -> do
   let
     StateLightPower {..} = pPayload
   printIt $ "Got LightPower: " <> show p
@@ -2021,7 +2131,7 @@ getLight
   -> Device
   -> IO ()
 getLight ss d
-  = outerGet ss d $ \_ p@(Packet {..}) _ _ -> do
+  = outerGet ss d GetLight $ \_ p@(Packet {..}) _ _ -> do
   let
     StateLight {..} = pPayload
   printIt $ "Got Light: " <> show p
@@ -2032,13 +2142,14 @@ outerGet
    . MessageIdC get
   => SharedState
   -> Device
+  -> get
   -> (SharedState -> Packet (StateReply get) -> SockAddr -> BSL.ByteString -> IO ())
   -> IO ()
-outerGet ss d cb
+outerGet ss d pay cb
   = do
   p <- newPacket' ss cb
   let
-    fp = p msgCons
+    fp = p pay
     np = fp { pFrameAddress = (pFrameAddress fp) { faTarget = deviceIdToTarget $ dDeviceId d} }
   sendToDevice ss d np
 
@@ -2253,4 +2364,20 @@ mkTestPacket tag src tar ack res sequ typ pay
     p = Packet f fa ph pay
   in
     p
+
+
+sendToLight
+  :: ( Binary a
+     )
+  => SharedState
+  -> Light
+  -> Packet a
+  -> IO ()
+sendToLight SharedState {..} Light {..} packet
+  = (printIt $ "Sending to: " <> show d <> " Data: " <> show (BSL16.encode bytes)) >>
+    sendManyTo ssSocket (BSL.toChunks bytes) (SockAddrInet p w)
+  where
+    d@(Device {..}) = lDevice
+    DeviceSocketAddress p (DeviceAddress (unWord32le -> w)) = dAddr
+    bytes = Bin.encode packet
 

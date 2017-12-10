@@ -1,3 +1,4 @@
+{-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE PartialTypeSignatures #-}
 {-# LANGUAGE RecordWildCards #-}
@@ -6,6 +7,7 @@ module Main where
 
 import Lib
 import qualified Data.Binary as Bin
+import qualified Data.List as L
 import Control.Concurrent
 import Control.Concurrent.Async
 import Options.Applicative
@@ -60,6 +62,30 @@ main = do
 
   cached <- listCached (asSharedState r)
   pPrint cached
+
+
+  let
+    Just theaterLamp = L.find (\l ->  lLabel l == Just (Label "Front Door")) cached
+
+  ap <- newPacket' (asSharedState r) $ \_ _ _ _ -> pure ()
+  sendToLight (asSharedState r) theaterLamp (ap $ SetLightPower (LightPower 65535) (1000))
+
+  let
+    loope
+      :: Integer
+      -> IO ()
+    loope !n = do
+      let
+        pay = case n `mod` 2 of
+          0 -> SetColor () (HSBK 23456 23456 65535 2500) 5000
+          1 -> SetColor () (HSBK 24 65535 65535 2500) 5000
+      ap' <- newPacket' (asSharedState r) $ \_ _ _ _ -> pure ()
+      sendToLight (asSharedState r) theaterLamp (ap' $ pay)
+      threadDelay 5000000
+      loope (n + 1)
+
+  loope 0
+
 
   resR <- waitCatch $ asReceiveThread r
   resD <- waitCatch $ asDiscoveryThread r
