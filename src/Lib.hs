@@ -27,6 +27,7 @@
 
 module Lib where
 
+import            Control.Applicative           ( (<|>) )
 import            Control.Arrow
 import            Control.Concurrent
 import            Control.Concurrent.Async
@@ -58,6 +59,7 @@ import            Data.Binary                   ( Binary (..)
                                                 , Get
                                                 , Put
                                                 )
+import            Data.Binary.IEEE754
 import            Data.Bits                     ( zeroBits
                                                 , Bits(..)
                                                 , FiniteBits(..)
@@ -69,6 +71,7 @@ import            Data.Bits                     ( zeroBits
 import            Data.Bool                     ( bool )
 import            Data.Char                     ( intToDigit, isPrint )
 import            Data.Coerce
+import            Data.Default
 import            Data.Functor.Identity         ( Identity )
 import            Data.Hashable                 ( Hashable )
 import            Data.Int                      ( Int8
@@ -76,8 +79,11 @@ import            Data.Int                      ( Int8
                                                 , Int32
                                                 , Int64
                                                 )
+import            Data.Maybe                    ( isJust )
 import            Data.Monoid                   ( (<>) )
 import            Data.Proxy
+import            Data.Time.Clock
+import            Data.Time.Clock.POSIX
 import            Data.Word                     ( Word8
                                                 , Word16
                                                 , Word32
@@ -114,6 +120,111 @@ import qualified  Data.HashMap.Strict           as HM
 import qualified  Data.Text.Lazy                as TL
 import qualified  Data.Text.Lazy.Encoding       as TLE
 import qualified  Network.Info                  as NI
+
+
+-- | Documented and undocumented message types from controlifx
+-- SetSiteType                         = 1
+-- GetServiceType                      = 2
+-- StateServiceType                    = 3
+-- GetTimeType                         = 4
+-- SetTimeType                         = 5
+-- StateTimeType                       = 6
+-- GetResetSwitchType                  = 7
+-- StateResetSwitchType                = 8
+-- GetDummyLoadType                    = 9
+-- SetDummyLoadType                    = 10
+-- StateDummyLoadType                  = 11
+-- GetHostInfoType                     = 12
+-- StateHostInfoType                   = 13
+-- GetHostFirmwareType                 = 14
+-- StateHostFirmwareType               = 15
+-- GetWifiInfoType                     = 16
+-- StateWifiInfoType                   = 17
+-- GetWifiFirmwareType                 = 18
+-- StateWifiFirmwareType               = 19
+-- GetPowerType                        = 20
+-- SetPowerType                        = 21
+-- StatePowerType                      = 22
+-- GetLabelType                        = 23
+-- SetLabelType                        = 24
+-- StateLabelType                      = 25
+-- GetTagsType                         = 26
+-- SetTagsType                         = 27
+-- StateTagsType                       = 28
+-- GetTagLabelsType                    = 29
+-- SetTagLabelsType                    = 30
+-- StateTagLabelsType                  = 31
+-- GetVersionType                      = 32
+-- StateVersionType                    = 33
+-- GetInfoType                         = 34
+-- StateInfoType                       = 35
+-- GetMcuRailVoltageType               = 36
+-- StateMcuRailVoltageType             = 37
+-- SetRebootType                       = 38
+-- SetFactoryTestModeType              = 39
+-- DisableFactoryTestModeType          = 40
+-- StateFactoryTestModeType            = 41
+-- StateSiteType                       = 42
+-- StateRebootType                     = 43
+-- SetPanGatewayType                   = 44
+-- AcknowledgementType                 = 45
+-- SetFactoryResetType                 = 46
+-- StateFactoryResetType               = 47
+-- GetLocationType                     = 48
+-- SetLocationType                     = 49
+-- StateLocationType                   = 50
+-- GetGroupType                        = 51
+-- SetGroupType                        = 52
+-- StateGroupType                      = 53
+-- GetOwnerType                        = 54
+-- SetOwnerType                        = 55
+-- StateOwnerType                      = 56
+-- GetFactoryTestModeType              = 57
+-- EchoRequestType                     = 58
+-- EchoResponseType                    = 59
+-- LightGetType                        = 101
+-- LightSetColorType                   = 102
+-- LightSetWaveformType                = 103
+-- LightSetDimAbsoluteType             = 104
+-- LightSetDimRelativeType             = 105
+-- LightSetRgbwType                    = 106
+-- LightStateType                      = 107
+-- LightGetRailVoltageType             = 108
+-- LightStateRailVoltageType           = 109
+-- LightGetTemperatureType             = 110
+-- LightStateTemperatureType           = 111
+-- LightSetCalibrationCoefficientsType = 112
+-- LightSetSimpleEventType             = 113
+-- LightGetSimpleEventType             = 114
+-- LightStateSimpleEventType           = 115
+-- LightGetPowerType                   = 116
+-- LightSetPowerType                   = 117
+-- LightStatePowerType                 = 118
+-- LightSetWaveformOptionalType        = 119
+-- WanGetType                          = 201
+-- WanSetType                          = 202
+-- WanStateType                        = 203
+-- WanGetAuthKeyType                   = 204
+-- WanSetAuthKeyType                   = 205
+-- WanStateAuthKeyType                 = 206
+-- WanSetKeepAliveType                 = 207
+-- WanStateKeepAliveType               = 208
+-- WanSetHostType                      = 209
+-- WanGetHostType                      = 210
+-- WanStateHostType                    = 211
+-- WifiGetType                         = 301
+-- WifiSetType                         = 302
+-- WifiStateType                       = 303
+-- WifiGetAccessPointsType             = 304
+-- WifiSetAccessPointType              = 305
+-- WifiStateAccessPointsType           = 306
+-- WifiGetAccessPointType              = 307
+-- WifiStateAccessPointType            = 308
+-- WifiSetAccessPointBroadcastType     = 309
+-- SensorGetAmbientLightType           = 401
+-- SensorStateAmbientLightType         = 402
+-- SensorGetDimmerVoltageType          = 403
+-- SensorStateDimmerVoltageType        = 404
 
 --data PH a = PH Word16le (Proxy a)
 --data P a = P (PH a) a
@@ -209,6 +320,14 @@ instance Binary Int64le where
     = BinP.putInt64le . unInt64le
   get
     = Int64le <$> BinG.getInt64le
+
+newtype Float32le
+  = Float32le { unFloat32le :: Float }
+  deriving newtype (Num, Real, Fractional, RealFrac, RealFloat, Floating, Show, Read, Eq, Ord, NFData)
+
+instance Binary Float32le where
+    put (Float32le f) = putFloat32le f
+    get = Float32le <$> getFloat32le
 
 data Tagged
   = SingleTagged -- Encodes as 0, means FrameAddress `target` must be a MAC
@@ -399,16 +518,69 @@ data Packet a
   }
   deriving (Show, Eq)
 
+newtype Hue
+  = Hue Word16le
+  deriving (Show, Eq, Num, Ord, Enum, Real, Integral, Binary)
+
+newtype Saturation
+  = Saturation Word16le
+  deriving (Show, Eq, Num, Ord, Enum, Real, Integral, Binary)
+
+newtype Brightness
+  = Brightness Word16le
+  deriving (Show, Eq, Num, Ord, Enum, Real, Integral, Binary)
+
+newtype Kelvin
+  = Kelvin Word16le
+  deriving (Show, Eq, Num, Ord, Enum, Real, Integral, Binary)
+
 -- Layout in bits:   16|16|16|16
 --                   ui|ui|ui|ui
 data HSBK
   = HSBK
-  { hsbkHue :: !Word16le -- 0-65535
-  , hsbkSaturation :: !Word16le -- 0-65535
-  , hsbkBrightness :: !Word16le -- 0-65535
-  , hsbkKelvin :: !Word16le --2500-9000
+  { hsbkHue :: !Hue -- 0-65535
+  , hsbkSaturation :: !Saturation -- 0-65535
+  , hsbkBrightness :: !Brightness -- 0-65535
+  , hsbkKelvin :: !Kelvin --2500-9000
   }
   deriving (Show, Eq)
+
+instance Default HSBK where
+  def
+    = HSBK
+    { hsbkHue = 0
+    , hsbkSaturation = 0
+    , hsbkBrightness = 65535
+    , hsbkKelvin = 2700
+    }
+
+hue
+  :: Float
+  -> Maybe Hue
+hue v
+  | v >= 0 && v <= 360 = Just $ Hue $ floor $ v / 360 * 65535
+  | otherwise = Nothing
+
+saturation
+  :: Float
+  -> Maybe Saturation
+saturation v
+  | v >= 0 && v <= 100 = Just $ Saturation $ floor $ v / 100 * 65535
+  | otherwise = Nothing
+
+brightness
+  :: Float
+  -> Maybe Brightness
+brightness v
+  | v >= 0 && v <= 100 = Just $ Brightness $ floor $ v / 100 * 65535
+  | otherwise = Nothing
+
+kelvin
+  :: Float
+  -> Maybe Kelvin
+kelvin v
+  | v >= 2500 && v <= 9000 = Just $ Kelvin $ floor v
+  | otherwise = Nothing
 
 -- | 32 bytes
 newtype Label (l :: Symbol)
@@ -460,10 +632,10 @@ instance NFData ReplyType where
 
 data DeviceMessage
   = GetServiceMessage
-  -- HostInfo
-  -- HostFirmware
-  -- WifiInfo
-  -- WifiFirmware
+  | GetHostInfoMessage
+  | GetHostFirmwareMessage
+  | GetWifiInfoMessage
+  | GetWifiFirmwareMessage
   | GetPowerMessage
   | SetPowerMessage
   | GetLabelMessage
@@ -474,6 +646,7 @@ data DeviceMessage
   | SetLocationMessage
   | GetGroupMessage
   | SetGroupMessage
+  | GetUnknown54Message
   | EchoMessage
   deriving (Show, Eq, Generic)
 
@@ -508,10 +681,10 @@ instance NFData MultiZoneMessage where
 
 data DeviceReply
   = StateServiceReply
-  -- HostInfo
-  -- HostFirmware
-  -- WifiInfo
-  -- WifiFirmware
+  | StateHostInfoReply
+  | StateHostFirmwareReply
+  | StateWifiInfoReply
+  | StateWifiFirmwareReply
   | StatePowerReply
   | StateLabelReply
   | StateVersionReply
@@ -519,6 +692,7 @@ data DeviceReply
   | AcknowledgementReply
   | StateLocationReply
   | StateGroupReply
+  | StateUnknown54Reply
   | EchoReply
   deriving (Show, Eq, Generic)
 
@@ -545,6 +719,18 @@ instance NFData MultiZoneReply where
   rnf
     = genericRnfV1
 
+-- | 54 undocumented messages
+--  $\NUL\NUL\DC4\244Q\n\SO\208s\143\134\191\175\NUL\NUL\NUL\NUL\NUL\NUL\NUL\NUL\STX\v\NUL\NUL\NUL\NUL\NUL\NUL\NUL\NUL6\NUL\NUL\NUL
+--
+
+directionToWord16le
+  :: Direction
+  -> Word16le
+directionToWord16le
+  = \case
+  Request rt -> messageTypeToWord16le rt
+  Reply rt -> replyTypeToWord16le rt
+
 messageTypeToWord16le
   :: MessageType
   -> Word16le
@@ -559,6 +745,10 @@ messageTypeToWord16le
  where
   deviceMessageTypeToWord16le = \case
     GetServiceMessage -> 2
+    GetHostInfoMessage -> 12
+    GetHostFirmwareMessage -> 14
+    GetWifiInfoMessage -> 16
+    GetWifiFirmwareMessage -> 18
     GetPowerMessage -> 20
     SetPowerMessage -> 21
     GetLabelMessage -> 23
@@ -569,6 +759,7 @@ messageTypeToWord16le
     SetLocationMessage -> 49
     GetGroupMessage -> 51
     SetGroupMessage -> 52
+    GetUnknown54Message -> 54
     EchoMessage -> 58
   lightMessageTypeToWord16le = \case
     GetLightMessage -> 101
@@ -577,11 +768,113 @@ messageTypeToWord16le
     SetWaveformOptionalMessage -> 119
     GetLightPowerMessage -> 116
     SetLightPowerMessage -> 117
-    GetInfraredMessage -> 121
+    GetInfraredMessage -> 120
     SetInfraredMessage -> 122
   multiZoneMessageTypeToWord16le = \case
     SetColorZonesMessage -> 501
     GetColorZonesMessage -> 502
+
+replyTypeToWord16le
+  :: ReplyType
+  -> Word16le
+replyTypeToWord16le
+ = \case
+ DeviceReplyType dm ->
+   deviceReplyTypeToWord16le dm
+ LightReplyType lm ->
+   lightReplyTypeToWord16le lm
+ MultiZoneReplyType mzm ->
+   multiZoneReplyTypeToWord16le mzm
+ where
+  deviceReplyTypeToWord16le = \case
+    StateServiceReply -> 3
+    StateHostInfoReply -> 13
+    StateHostFirmwareReply -> 15
+    StateWifiInfoReply -> 17
+    StateWifiFirmwareReply -> 19
+    StatePowerReply -> 22
+    StateLabelReply -> 25
+    StateVersionReply -> 33
+    StateInfoReply -> 35
+    AcknowledgementReply -> 45
+    StateLocationReply -> 50
+    StateGroupReply -> 53
+    StateUnknown54Reply -> 55
+    EchoReply -> 59
+  lightReplyTypeToWord16le = \case
+    StateReply -> 107
+    StateLightPowerReply -> 118
+    StateInfraredReply -> 121
+  multiZoneReplyTypeToWord16le = \case
+    StateZoneReply -> 503
+    StateMultiZoneReply -> 506
+
+word16leToDirection
+  :: Word16le
+  -> Either String Direction
+word16leToDirection w
+  = (Request <$> word16leToMessageType w) <|> (Reply <$> word16leToReplyType w)
+
+word16leToMessageType
+  :: Word16le
+  -> Either String MessageType
+word16leToMessageType 2
+  = Right $ DeviceMessageType GetServiceMessage
+word16leToMessageType 14
+  = Right $ DeviceMessageType GetHostFirmwareMessage
+word16leToMessageType 16
+  = Right $ DeviceMessageType GetWifiInfoMessage
+word16leToMessageType 18
+  = Right $ DeviceMessageType GetWifiFirmwareMessage
+word16leToMessageType 20
+  = Right $ DeviceMessageType GetPowerMessage
+word16leToMessageType 21
+  = Right $ DeviceMessageType SetPowerMessage
+word16leToMessageType 23
+  = Right $ DeviceMessageType GetLabelMessage
+word16leToMessageType 24
+  = Right $ DeviceMessageType SetLabelMessage
+word16leToMessageType 32
+  = Right $ DeviceMessageType GetVersionMessage
+word16leToMessageType 34
+  = Right $ DeviceMessageType GetInfoMessage
+word16leToMessageType 48
+  = Right $ DeviceMessageType GetLocationMessage
+word16leToMessageType 49
+  = Right $ DeviceMessageType SetLocationMessage
+word16leToMessageType 51
+  = Right $ DeviceMessageType GetGroupMessage
+word16leToMessageType 52
+  = Right $ DeviceMessageType SetGroupMessage
+word16leToMessageType 54
+  = Right $ DeviceMessageType GetUnknown54Message
+word16leToMessageType 58
+  = Right $ DeviceMessageType EchoMessage
+
+word16leToMessageType 101
+  = Right $ LightMessageType GetLightMessage
+word16leToMessageType 102
+  = Right $ LightMessageType SetColorMessage
+word16leToMessageType 103
+  = Right $ LightMessageType SetWaveformMessage
+word16leToMessageType 119
+  = Right $ LightMessageType SetWaveformOptionalMessage
+word16leToMessageType 116
+  = Right $ LightMessageType GetLightPowerMessage
+word16leToMessageType 117
+  = Right $ LightMessageType SetLightPowerMessage
+word16leToMessageType 121
+  = Right $ LightMessageType GetInfraredMessage
+word16leToMessageType 122
+  = Right $ LightMessageType SetInfraredMessage
+
+word16leToMessageType 501
+  = Right $ MultiZoneMessageType SetColorZonesMessage
+word16leToMessageType 502
+  = Right $ MultiZoneMessageType GetColorZonesMessage
+
+word16leToMessageType x
+  = Left $ "no case for " <> show x
 
 -- 13 15 17 19 are unused  33
 word16leToReplyType
@@ -603,6 +896,8 @@ word16leToReplyType 50
   = Right $ DeviceReplyType StateLocationReply
 word16leToReplyType 53
   = Right $ DeviceReplyType StateGroupReply
+word16leToReplyType 55
+  = Right $ DeviceReplyType StateUnknown54Reply
 word16leToReplyType 59
   = Right $ DeviceReplyType EchoReply
 
@@ -617,7 +912,6 @@ word16leToReplyType 503
   = Right $ MultiZoneReplyType StateZoneReply
 word16leToReplyType 506
   = Right $ MultiZoneReplyType StateMultiZoneReply
-
 word16leToReplyType x
   = Left $ "no case for " <> show x
 
@@ -734,10 +1028,23 @@ newtype LocationId
   deriving (Show, Eq)
   deriving newtype Binary
 
+instance Default LocationId where
+  def
+    = LocationId $ ByteId16 $ replicate 16 0
+
+instance Default (Label n) where
+  def
+    = Label ""
+
 newtype GroupId
   = GroupId { unGroupId :: ByteId16 }
   deriving (Show, Eq)
   deriving newtype Binary
+
+instance Default GroupId where
+  def
+    = GroupId $ ByteId16 $ replicate 16 0
+
 
 
 data Magic
@@ -783,6 +1090,11 @@ instance Binary LifxUTC where
     = Bin.put . unLifxUTC
   get
     = LifxUTC <$> Bin.get
+
+getCurrentLifxUTC
+  :: IO LifxUTC
+getCurrentLifxUTC
+  = (LifxUTC . floor . (* 1000000000) . utcTimeToPOSIXSeconds) <$> getCurrentTime
 
 data StateLocation
   = StateLocation
@@ -992,24 +1304,13 @@ instance WithSize GetLabel where
   size
     = const 0
 
-data GetVersion
-  = GetVersion
-  deriving Show
-
-instance Binary GetVersion where
-  put
-    = const $ pure ()
-  get
-    = pure GetVersion
-
-instance MessageId GetVersion where
-  type StateReply GetVersion = StateVersion
-  msgId = const 32
-  msgTyp = const $ DeviceMessageType GetVersionMessage
-
 newtype VendorId
   = VendorId Word32le
   deriving (Show, Eq, Binary)
+
+instance Default VendorId where
+  def
+    = VendorId 1
 
 newtype HardwareVersion
   = HardwareVersion Word32le
@@ -1149,9 +1450,208 @@ instance WithSize StateVersion where
   size
     = const 12
 
+data GetVersion
+  = GetVersion
+  deriving Show
+
+instance Binary GetVersion where
+  put
+    = const $ pure ()
+  get
+    = pure GetVersion
+
+instance MessageId GetVersion where
+  type StateReply GetVersion = StateVersion
+  msgId = const 32
+  msgTyp = const $ DeviceMessageType GetVersionMessage
+
 instance WithSize GetVersion where
   size
     = const 0
+
+data GetHostInfo
+  = GetHostInfo
+  deriving Show
+
+instance Binary GetHostInfo where
+  put
+    = const $ pure ()
+  get
+    = pure GetHostInfo
+
+instance MessageId GetHostInfo where
+  type StateReply GetHostInfo = StateHostInfo
+  msgId = const 12
+  msgTyp = const $ DeviceMessageType GetHostInfoMessage
+
+instance WithSize GetHostInfo where
+  size
+    = const 0
+
+data StateHostInfo
+  = StateHostInfo
+  { sthiSignal :: Float32le
+  , sthiTx :: Word32le
+  , sthiRx :: Word32le
+  , sthiReserved :: Int16le
+  }
+  deriving Show
+
+instance Binary StateHostInfo where
+  put StateHostInfo {..}
+    = do
+    Bin.put sthiSignal
+    Bin.put sthiTx
+    Bin.put sthiRx
+    Bin.put sthiReserved
+  get
+    = do
+    sthiSignal <- Bin.get
+    sthiTx <- Bin.get
+    sthiRx <- Bin.get
+    sthiReserved <- Bin.get
+    pure StateHostInfo {..}
+
+instance WithSize StateHostInfo where
+  size
+    = const $ 4 + 4 + 4 + 2
+
+
+data GetHostFirmware
+  = GetHostFirmware
+  deriving Show
+
+instance Binary GetHostFirmware where
+  put
+    = const $ pure ()
+  get
+    = pure GetHostFirmware
+
+instance MessageId GetHostFirmware where
+  type StateReply GetHostFirmware = StateHostFirmware
+  msgId = const 14
+  msgTyp = const $ DeviceMessageType GetHostFirmwareMessage
+
+instance WithSize GetHostFirmware where
+  size
+    = const 0
+
+data StateHostFirmware
+ = StateHostFirmware
+  { sthfBuild :: Word64le
+  , sthfReserved :: Word64le
+  , sthfVersion :: Word32le
+  }
+  deriving Show
+
+instance Binary StateHostFirmware where
+  put StateHostFirmware {..}
+    = do
+    Bin.put sthfBuild
+    Bin.put sthfReserved
+    Bin.put sthfVersion
+
+  get
+    = do
+    sthfBuild <- Bin.get
+    sthfReserved <- Bin.get
+    sthfVersion <- Bin.get
+    pure StateHostFirmware {..}
+
+instance WithSize StateHostFirmware where
+  size
+    = const $ 8 + 8 + 4
+
+
+data GetWifiInfo
+  = GetWifiInfo
+  deriving Show
+
+instance Binary GetWifiInfo where
+  put
+    = const $ pure ()
+  get
+    = pure GetWifiInfo
+
+instance MessageId GetWifiInfo where
+  type StateReply GetWifiInfo = StateWifiInfo
+  msgId = const 16
+  msgTyp = const $ DeviceMessageType GetWifiInfoMessage
+
+instance WithSize GetWifiInfo where
+  size
+    = const 0
+
+data StateWifiInfo
+  = StateWifiInfo
+  { stwiSignal :: Float32le
+  , stwiTx :: Word32le
+  , stwiRx :: Word32le
+  , stwiReserved :: Int16le
+  }
+  deriving Show
+
+instance Binary StateWifiInfo where
+  put StateWifiInfo {..}
+    = do
+    Bin.put stwiSignal
+    Bin.put stwiTx
+    Bin.put stwiRx
+    Bin.put stwiReserved
+  get
+    = do
+    stwiSignal <- Bin.get
+    stwiTx <- Bin.get
+    stwiRx <- Bin.get
+    stwiReserved <- Bin.get
+    pure StateWifiInfo {..}
+
+instance WithSize StateWifiInfo where
+  size
+    = const $ 4 + 4 + 4 + 2
+
+data GetWifiFirmware
+  = GetWifiFirmware
+  deriving Show
+
+instance Binary GetWifiFirmware where
+  put
+    = const $ pure ()
+  get
+    = pure GetWifiFirmware
+
+instance MessageId GetWifiFirmware where
+  type StateReply GetWifiFirmware = StateWifiFirmware
+  msgId = const 18
+  msgTyp = const $ DeviceMessageType GetWifiFirmwareMessage
+
+instance WithSize GetWifiFirmware where
+  size
+    = const 0
+
+data StateWifiFirmware
+  = StateWifiFirmware
+  { stwfBuild :: Word64le -- ns since epoch
+  , stwfReserved :: Word64le
+  , stwfVersion :: Word32le
+  } deriving Show
+
+instance Binary StateWifiFirmware where
+  put StateWifiFirmware {..}
+    = do
+    Bin.put stwfBuild
+    Bin.put stwfReserved
+    Bin.put stwfVersion
+  get
+    = do
+    stwfBuild <- Bin.get
+    stwfReserved <- Bin.get
+    stwfVersion <- Bin.get
+    pure StateWifiFirmware {..}
+
+instance WithSize StateWifiFirmware where
+  size
+    = const $ 8 + 8 + 4
 
 data GetInfo
   = GetInfo
@@ -1162,6 +1662,90 @@ instance Binary GetInfo where
     = const $ pure ()
   get
     = pure GetInfo
+
+instance WithSize GetInfo where
+  size
+    = const 0
+
+data StateInfo
+  = StateInfo
+  { stiTime :: Word64le
+  , stiUptime :: Word64le
+  , stiDowntime :: Word64le
+  }
+  deriving Show
+
+instance Binary StateInfo where
+  put StateInfo {..}
+    = do
+    Bin.put stiTime
+    Bin.put stiUptime
+    Bin.put stiDowntime
+
+  get
+    = do
+    stiTime <- Bin.get
+    stiUptime <- Bin.get
+    stiDowntime <- Bin.get
+    pure StateInfo {..}
+
+instance WithSize StateInfo where
+  size
+    = const $ 8 + 8 + 8
+
+data GetUnknown54
+  = GetUnknown54
+  deriving Show
+
+instance Binary GetUnknown54 where
+  put
+    = const $ pure ()
+  get
+    = pure GetUnknown54
+
+instance MessageId GetUnknown54 where
+  type StateReply GetUnknown54 = StateUnknown54
+  msgId = const 54
+  msgTyp = const $ DeviceMessageType GetUnknown54Message
+
+instance WithSize GetUnknown54 where
+  size
+    = const 0
+
+newtype Unknown54Id
+  = Unknown54Id { unUnknown54Id :: ByteId16 }
+  deriving (Show, Eq, Binary)
+
+instance Default Unknown54Id where
+  def
+    = Unknown54Id $ ByteId16 $ replicate 16 0
+
+data StateUnknown54
+  = StateUnknown54
+  { stu54Unknown54Id :: Unknown54Id
+  , stu54Label :: Label "unknown54"
+  , stu54UpdatedAt :: LifxUTC
+  }
+  deriving Show
+
+instance Binary StateUnknown54 where
+  put StateUnknown54 {..}
+    = do
+    Bin.put stu54Unknown54Id
+    Bin.put stu54Label
+    Bin.put stu54UpdatedAt
+
+  get
+    = do
+    stu54Unknown54Id <- Bin.get
+    stu54Label <- Bin.get
+    stu54UpdatedAt <- Bin.get
+    pure StateUnknown54 {..}
+
+instance WithSize StateUnknown54 where
+  size
+    = const $ 16 + 32 + 8
+
 
 data GetGroup
   = GetGroup
@@ -1273,6 +1857,10 @@ instance Binary Acknowledgement where
     = const $ pure ()
   get
     = pure Acknowledgement
+
+instance WithSize Acknowledgement where
+  size = const 0
+
 
 -- 102: Layout in bits:   8|_|32
 --                        ui|hsbk|ui
@@ -1600,20 +2188,18 @@ instance Binary UnusedMac where
 
 instance Binary ProtocolHeader where
   put _p@ProtocolHeader {..}
-    = case phType of
-    Request phTypeR -> do
+    = do
       Bin.put @Word64le 0
-      Bin.put $ messageTypeToWord16le phTypeR
+      Bin.put $ directionToWord16le phType
       Bin.put @Word16le 0
-    x -> fail $ "Attempting to encode a reply type" <> show x
 
   get
     = do
     _ <- Bin.get @Word64le
-    phType_ <- word16leToReplyType <$> Bin.get
+    phType_ <- word16leToDirection <$> Bin.get
     phType <- case phType_ of
       Left p -> fail $ show p
-      Right p -> pure $ Reply p --TODO FIxme
+      Right p -> pure p --TODO FIxme
 
     _ <- Bin.get @Word16le
 
@@ -1745,6 +2331,7 @@ data SharedState
   , ssDevices :: !(TVar (HM.HashMap DeviceId Light))
   , ssSocket :: !Socket
   , ssNextSeq :: !(IO Sequence)
+  , ssUniqueSource :: !UniqueSource
   }
 
 data Light
@@ -1868,9 +2455,10 @@ data PayloadDecodeError
 
 
 decodeHeader
-  :: BSL.ByteString
+  :: Maybe UniqueSource
+  -> BSL.ByteString
   -> Except HeaderDecodeError (Header, BSL.ByteString)
-decodeHeader bs
+decodeHeader uniqSrc bs
   = case Bin.decodeOrFail bs of
   Left (str, offset, err) ->
     throwE $ NotAHeader err bs str offset
@@ -1880,7 +2468,7 @@ decodeHeader bs
       packetSource = fSource $ hFrame hdr
     when (packetSize /= fromIntegral (BSL.length bs))
       $ throwE $ ImproperSizeInHeader hdr bs rema cons
-    when (packetSource /= uniqueSource)
+    when (isJust uniqSrc && Just packetSource /= uniqSrc)
       $ throwE $ ImproperSourceInHeader hdr bs rema cons
     pure (hdr, rema)
 
@@ -1911,7 +2499,7 @@ receiveThread ss@SharedState {..}
   (!bs, sa) <- recvFrom ssSocket 1500
   let
     bsl = BSL.fromStrict bs
-    headerE = runExcept $ decodeHeader bsl
+    headerE = runExcept $ decodeHeader (Just ssUniqueSource) bsl
 
   forM_ headerE $ \(header, rest) -> async $ do
     let
@@ -1930,9 +2518,9 @@ onStateService
   -> SockAddr
   -> BSL.ByteString
   -> IO ()
-onStateService ss@(SharedState {..}) Packet {..} sa _orig
+onStateService ss@(SharedState {..}) packet@(Packet {..}) sa _orig
   = do
-  --logStr $ "Got State Service " <> show pPayload <> " " <> show sa <> " " <> show pFrameAddress <> (show $ BSL16.encode orig)
+  logStr $ "Got State Service " <> show packet
   forM_ (socketAddrToDeviceSocketAddr sa) $ \sa' -> do
     let
       incomingDevice = Device sa' (DeviceId $ unTarget $ faTarget pFrameAddress)
@@ -1965,7 +2553,8 @@ sendToDevice SharedState {..} d@(Device {..}) packet
     sendManyTo ssSocket (BSL.toChunks bytes) (SockAddrInet p w)
   where
     DeviceSocketAddress p (DeviceAddress (unWord32le -> w)) = dAddr
-    bytes = Bin.encode packet
+    bytes = Bin.encode np
+    np = packet { pFrameAddress = (pFrameAddress packet) { faTarget = deviceIdToTarget dDeviceId} }
 
 updateVersion
   :: SharedState
@@ -2285,6 +2874,7 @@ mkState
   ssDevices <- newTVarIO mempty
 
   let
+    ssUniqueSource = uniqueSource
     sharedState = SharedState {..}
   asReceiveThread <- receiveThread sharedState
   asDiscoveryThread <- discoveryThread sharedState bcast
@@ -2373,11 +2963,8 @@ sendToLight
   -> Light
   -> Packet a
   -> IO ()
-sendToLight SharedState {..} Light {..} packet
-  = (printIt $ "Sending to: " <> show d <> " Data: " <> show (BSL16.encode bytes)) >>
-    sendManyTo ssSocket (BSL.toChunks bytes) (SockAddrInet p w)
+sendToLight ss@(SharedState {}) Light {..} packet
+  = sendToDevice ss d packet
   where
     d@(Device {..}) = lDevice
-    DeviceSocketAddress p (DeviceAddress (unWord32le -> w)) = dAddr
-    bytes = Bin.encode packet
 

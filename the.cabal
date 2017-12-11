@@ -34,11 +34,14 @@ library
                       , monad-control
                       , transformers
                       , mtl
+                      , time
                       , text
                       , deepseq
                       , deepseq-generics
                       , unordered-containers
                       , QuickCheck
+                      , data-binary-ieee754
+                      , data-default
   default-language:    Haskell2010
   ghc-options: -Wall -Werror
 
@@ -62,6 +65,28 @@ executable the-client
                      , text-format
                      , binary
                      , pretty-simple
+  default-language:    Haskell2010
+
+executable the-light
+  hs-source-dirs:      light
+  main-is:             Main.hs
+  ghc-options:         -threaded
+  build-depends:       base
+                     , the
+                     , async
+                     , optparse-applicative
+                     , text-format
+                     , binary
+                     , pretty-simple
+                     , network
+                     , network-info
+                     , time
+                     , bytestring
+                     , mtl
+                     , transformers
+                     , data-binary-ieee754
+                     , data-default
+                     , stm
   default-language:    Haskell2010
 
 test-suite the-test

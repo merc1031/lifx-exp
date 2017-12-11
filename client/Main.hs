@@ -65,7 +65,10 @@ main = do
 
 
   let
-    Just theaterLamp = L.find (\l ->  lLabel l == Just (Label "Front Door")) cached
+    Just theaterLamp = L.find (\l ->  lLabel l == Just (Label "Theater Lamp")) cached
+
+  unkP <- newPacket' (asSharedState r) $ \_ p _ o -> print $ "******\nGot: " <> show p <> " " <> show o
+  sendToLight (asSharedState r) theaterLamp (unkP $ GetUnknown54)
 
   ap <- newPacket' (asSharedState r) $ \_ _ _ _ -> pure ()
   sendToLight (asSharedState r) theaterLamp (ap $ SetLightPower (LightPower 65535) (1000))
@@ -76,12 +79,20 @@ main = do
       -> IO ()
     loope !n = do
       let
-        pay = case n `mod` 2 of
-          0 -> SetColor () (HSBK 23456 23456 65535 2500) 5000
-          1 -> SetColor () (HSBK 24 65535 65535 2500) 5000
+        Just firstColor = HSBK <$> hue 128.85 <*> saturation 35.8 <*> brightness 100 <*> kelvin 2500
+        Just smearColor = HSBK <$> hue 79 <*> saturation 100 <*> brightness 100 <*> kelvin 2500
+        Just secondColor = HSBK <$> hue 0.132 <*> saturation 100 <*> brightness 100 <*> kelvin 2500
+        firstTransition = 5000
+        secondTransition = 5000
+        smearTransition = 500
+        (c, t) = case n `mod` 4 of
+          0 -> (firstColor,  firstTransition)
+          1 -> (smearColor,  smearTransition)
+          2 -> (secondColor, secondTransition)
+          3 -> (smearColor, smearTransition)
       ap' <- newPacket' (asSharedState r) $ \_ _ _ _ -> pure ()
-      sendToLight (asSharedState r) theaterLamp (ap' $ pay)
-      threadDelay 5000000
+      sendToLight (asSharedState r) theaterLamp (ap' $ SetColor () c t)
+      threadDelay $ fromIntegral $ t * 1000
       loope (n + 1)
 
   loope 0
