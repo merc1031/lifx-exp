@@ -67,8 +67,8 @@ main = do
   let
     Just theaterLamp = L.find (\l ->  lLabel l == Just (Label "Theater Lamp")) cached
 
-  unkP <- newPacket' (asSharedState r) $ \_ p _ o -> print $ "******\nGot: " <> show p <> " " <> show o
-  sendToLight (asSharedState r) theaterLamp (unkP $ GetUnknown54)
+--  unkP <- newPacket' (asSharedState r) $ \_ p _ o -> print $ "******\nGot: " <> show p <> " " <> show o
+--  sendToLight (asSharedState r) theaterLamp (unkP $ GetUnknown54)
 
   ap <- newPacket' (asSharedState r) $ \_ _ _ _ -> pure ()
   sendToLight (asSharedState r) theaterLamp (ap $ SetLightPower (LightPower 65535) (1000))

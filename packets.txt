@@ -106,3 +106,102 @@ Crap Packet
 2400 0034 d204 0000 0000 0000 0000 0000 0000 0000 0000 0000 0000 0200 0000 0000 0000 0000
 Expectation
 2400 0034 d204 0000 0000 0000 0000 0000 0000 0000 0000 0000 0000 0000 0000 0000 0200 0000
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Click on gear
+"Header: Header {hFrame = Frame {fSize = 49, fOrigin = 0, fTagged = SingleTagged, fAddressable = HasFrameAddress, fProtocol = 1024, fSource = UniqueSource {unUniqueSource = 235557364}}, hFrameAddress = FrameAddress {faTarget = Mac {unMac = (208,115,143,134,191,175)}( d0:73:8f:86:bf:af ), faReserved = UnusedMac (Mac {unMac = ((),(),(),(),(),())}), faReserved2 = (), faAckRequired = NoAckRequired, faResRequired = NoResRequired, faSequence = Sequence {unSequence = 225}}, hProtocolHeader = ProtocolHeader {phReserved = 0, phType = Request (LightMessageType SetColorMessage), phReserved2 = ()}} Rest: \"\\NUL\\NUL\\NUL\\NUL\\NUL\\255\\255\\140\\n\\NUL\\NUL\\NUL\\NUL\""
+"Header: Header {hFrame = Frame {fSize = 61, fOrigin = 0, fTagged = SingleTagged, fAddressable = HasFrameAddress, fProtocol = 1024, fSource = UniqueSource {unUniqueSource = 235557364}}, hFrameAddress = FrameAddress {faTarget = Mac {unMac = (208,115,143,134,191,175)}( d0:73:8f:86:bf:af ), faReserved = UnusedMac (Mac {unMac = ((),(),(),(),(),())}), faReserved2 = (), faAckRequired = NoAckRequired, faResRequired = NoResRequired, faSequence = Sequence {unSequence = 224}}, hProtocolHeader = ProtocolHeader {phReserved = 0, phType = Request (LightMessageType SetWaveformOptionalMessage), phReserved2 = ()}} Rest: \"\\NUL\\NUL\\NUL\\NUL\\NUL\\NUL33\\140\\n\\160\\SI\\NUL\\NUL\\NUL\\NUL\\160A\\NUL\\NUL\\SOH\\NUL\\NUL\\SOH\\NUL\""
+
+
+
+Edit name -> OK
+"Header: Header {hFrame = Frame {fSize = 68, fOrigin = 0, fTagged = SingleTagged, fAddressable = HasFrameAddress, fProtocol = 1024, fSource = UniqueSource {unUniqueSource = 235557364}}, hFrameAddress = FrameAddress {faTarget = Mac {unMac = (208,115,143,134,191,175)}( d0:73:8f:86:bf:af ), faReserved = UnusedMac (Mac {unMac = ((),(),(),(),(),())}), faReserved2 = (), faAckRequired = NoAckRequired, faResRequired = ResRequired, faSequence = Sequence {unSequence = 12}}, hProtocolHeader = ProtocolHeader {phReserved = 0, phType = Request (DeviceMessageType SetLabelMessage), phReserved2 = ()}} Rest: \"Fake Light\\NUL\\NUL\\NUL\\NUL\\NUL\\NUL\\NUL\\NUL\\NUL\\NUL\\NUL\\NUL\\NUL\\NUL\\NUL\\NUL\\NUL\\NUL\\NUL\\NUL\\NUL\\NUL\""
+"Header: Header {hFrame = Frame {fSize = 38, fOrigin = 0, fTagged = SingleTagged, fAddressable = HasFrameAddress, fProtocol = 1024, fSource = UniqueSource {unUniqueSource = 235557364}}, hFrameAddress = FrameAddress {faTarget = Mac {unMac = (208,115,143,134,191,175)}( d0:73:8f:86:bf:af ), faReserved = UnusedMac (Mac {unMac = ((),(),(),(),(),())}), faReserved2 = (), faAckRequired = NoAckRequired, faResRequired = NoResRequired, faSequence = Sequence {unSequence = 13}}, hProtocolHeader = ProtocolHeader {phReserved = 0, phType = Request (LightMessageType SetInfraredMessage), phReserved2 = ()}} Rest: \"\\255\\255\""
+"Header: Header {hFrame = Frame {fSize = 68, fOrigin = 0, fTagged = SingleTagged, fAddressable = HasFrameAddress, fProtocol = 1024, fSource = UniqueSource {unUniqueSource = 235557364}}, hFrameAddress = FrameAddress {faTarget = Mac {unMac = (208,115,143,134,191,175)}( d0:73:8f:86:bf:af ), faReserved = UnusedMac (Mac {unMac = ((),(),(),(),(),())}), faReserved2 = (), faAckRequired = NoAckRequired, faResRequired = ResRequired, faSequence = Sequence {unSequence = 12}}, hProtocolHeader = ProtocolHeader {phReserved = 0, phType = Request (DeviceMessageType SetLabelMessage), phReserved2 = ()}} Rest: \"Fake Light\\NUL\\NUL\\NUL\\NUL\\NUL\\NUL\\NUL\\NUL\\NUL\\NUL\\NUL\\NUL\\NUL\\NUL\\NUL\\NUL\\NUL\\NUL\\NUL\\NUL\\NUL\\NUL\""
+"Header: Header {hFrame = Frame {fSize = 68, fOrigin = 0, fTagged = SingleTagged, fAddressable = HasFrameAddress, fProtocol = 1024, fSource = UniqueSource {unUniqueSource = 235557364}}, hFrameAddress = FrameAddress {faTarget = Mac {unMac = (208,115,143,134,191,175)}( d0:73:8f:86:bf:af ), faReserved = UnusedMac (Mac {unMac = ((),(),(),(),(),())}), faReserved2 = (), faAckRequired = NoAckRequired, faResRequired = ResRequired, faSequence = Sequence {unSequence = 12}}, hProtocolHeader = ProtocolHeader {phReserved = 0, phType = Request (DeviceMessageType SetLabelMessage), phReserved2 = ()}} Rest: \"Fake Light\\NUL\\NUL\\NUL\\NUL\\NUL\\NUL\\NUL\\NUL\\NUL\\NUL\\NUL\\NUL\\NUL\\NUL\\NUL\\NUL\\NUL\\NUL\\NUL\\NUL\\NUL\\NUL\""
+"Header: Header {hFrame = Frame {fSize = 68, fOrigin = 0, fTagged = SingleTagged, fAddressable = HasFrameAddress, fProtocol = 1024, fSource = UniqueSource {unUniqueSource = 235557364}}, hFrameAddress = FrameAddress {faTarget = Mac {unMac = (208,115,143,134,191,175)}( d0:73:8f:86:bf:af ), faReserved = UnusedMac (Mac {unMac = ((),(),(),(),(),())}), faReserved2 = (), faAckRequired = NoAckRequired, faResRequired = ResRequired, faSequence = Sequence {unSequence = 12}}, hProtocolHeader = ProtocolHeader {phReserved = 0, phType = Request (DeviceMessageType SetLabelMessage), phReserved2 = ()}} Rest: \"Fake Light\\NUL\\NUL\\NUL\\NUL\\NUL\\NUL\\NUL\\NUL\\NUL\\NUL\\NUL\\NUL\\NUL\\NUL\\NUL\\NUL\\NUL\\NUL\\NUL\\NUL\\NUL\\NUL\""
+
+
+
+
+
+
+
+
+
+
+*Main Lib> :set -fbreak-on-exception
+*Main Lib> :trace main
+
+Stopped in <exception thrown>, <unknown>
+_exception :: e = _
+[<unknown>] [<unknown>] *Main Lib> :list
+Unable to list source for <unknown>
+Try :back then :list
+[<unknown>] [<unknown>] *Main Lib> :back
+Logged breakpoint at /home/leo/dev/local/lifx-exp/src/Lib.hs:479:5-17
+_result :: ResRequired
+faResRequired :: ResRequired
+[-1: /home/leo/dev/local/lifx-exp/src/Lib.hs:479:5-17] [-1: /home/leo/dev/local/lifx-exp/src/Lib.hs:479:5-17] *Main Lib> :list
+478    , faAckRequired :: !AckRequired
+479    , faResRequired :: !ResRequired
+480    , faSequence :: !Sequence
+[-1: /home/leo/dev/local/lifx-exp/src/Lib.hs:479:5-17] [-1: /home/leo/dev/local/lifx-exp/src/Lib.hs:479:5-17] *Main Lib> :
+:?           :back        :browse!     :cmd         :ctags!      :delete      :force       :history     :issafe      :list        :main        :quit        :run         :seti        :sprint      :stepmodule  :undef
+:abandon     :break       :cd          :continue    :def         :edit        :forward     :info        :kind        :load        :module      :reload      :script      :show        :step        :trace       :unset
+:add         :browse      :check       :ctags       :def!        :etags       :help        :info!       :kind!       :load!       :print       :reload!     :set         :showi       :steplocal   :type        :where
+[-1: /home/leo/dev/local/lifx-exp/src/Lib.hs:479:5-17] [-1: /home/leo/dev/local/lifx-exp/src/Lib.hs:479:5-17] *Main Lib> :list
+478    , faAckRequired :: !AckRequired
+479    , faResRequired :: !ResRequired
+480    , faSequence :: !Sequence
+[-1: /home/leo/dev/local/lifx-exp/src/Lib.hs:479:5-17] [-1: /home/leo/dev/local/lifx-exp/src/Lib.hs:479:5-17] *Main Lib> :hist
+-1  : faResRequired (/home/leo/dev/local/lifx-exp/src/Lib.hs:479:5-17)
+-2  : hFrameAddress (/home/leo/dev/local/lifx-exp/src/Lib.hs:2442:5-17)
+-3  : lightReceiveThread (/home/leo/dev/local/lifx-exp/light/Main.hs:291:18-58)
+-4  : lightReceiveThread (/home/leo/dev/local/lifx-exp/light/Main.hs:369:5-13)
+-5  : lightReceiveThread (/home/leo/dev/local/lifx-exp/light/Main.hs:(369,5)-(387,25))
+-6  : lightReceiveThread (/home/leo/dev/local/lifx-exp/light/Main.hs:367:3-15)
+-7  : lightReceiveThread (/home/leo/dev/local/lifx-exp/light/Main.hs:(367,3)-(387,25))
+-8  : fbWifiInfo (/home/leo/dev/local/lifx-exp/light/Main.hs:394:5-14)
+-9  : lightReceiveThread:fbw (/home/leo/dev/local/lifx-exp/light/Main.hs:358:15-27)
+-10 : lightReceiveThread:fbw' (/home/leo/dev/local/lifx-exp/light/Main.hs:360:16-39)
+-11 : lightReceiveThread (/home/leo/dev/local/lifx-exp/light/Main.hs:362:9-32)
+-12 : lightReceiveThread (/home/leo/dev/local/lifx-exp/light/Main.hs:(354,16)-(363,5))
+-13 : lightReceiveThread (/home/leo/dev/local/lifx-exp/light/Main.hs:(354,3)-(363,5))
+-14 : lightReceiveThread (/home/leo/dev/local/lifx-exp/light/Main.hs:353:3-25)
+-15 : lightReceiveThread (/home/leo/dev/local/lifx-exp/light/Main.hs:291:11-58)
+-16 : def (/home/leo/dev/local/lifx-exp/light/Main.hs:513:18-25)
+-17 : def (/home/leo/dev/local/lifx-exp/light/Main.hs:512:18-29)
+-18 : lightReceiveThread:packet (/home/leo/dev/local/lifx-exp/light/Main.hs:287:16-56)
+-19 : lightReceiveThread:packet (/home/leo/dev/local/lifx-exp/light/Main.hs:286:24-53)
+-20 : lightReceiveThread:packet (/home/leo/dev/local/lifx-exp/light/Main.hs:286:16-53)
+...
+[-1: /home/leo/dev/local/lifx-exp/src/Lib.hs:479:5-17] [-1: /home/leo/dev/local/lifx-exp/src/Lib.hs:479:5-17] *Main Lib>
+
+

@@ -13,6 +13,11 @@ build-type:          Simple
 extra-source-files:  README.md
 cabal-version:       >=1.10
 
+flag profiling
+  description: "Enable profiling"
+  manual: True
+  default: False
+
 library
   hs-source-dirs:      src
   exposed-modules:     Lib
@@ -44,6 +49,8 @@ library
                       , data-default
   default-language:    Haskell2010
   ghc-options: -Wall -Werror
+  if flag(profiling)
+    ghc-options: -fprof-auto -fprof-auto-calls -auto-all -prof -prof-cafs
 
 executable the-exe
   hs-source-dirs:      app
@@ -71,6 +78,8 @@ executable the-light
   hs-source-dirs:      light
   main-is:             Main.hs
   ghc-options:         -threaded
+  if flag(profiling)
+    ghc-options: -fprof-auto -fprof-auto-calls -auto-all -prof -prof-cafs
   build-depends:       base
                      , the
                      , async

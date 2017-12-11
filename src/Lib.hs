@@ -257,6 +257,12 @@ import qualified  Network.Info                  as NI
 --      = return (Proxy :: Proxy s)
 --
 --  parseJSON _ = mzero
+--
+
+maxMessagesPerSecond
+  :: Word8
+maxMessagesPerSecond
+  = 20
 
 newtype Word16le
   = Word16le { unWord16le :: Word16 }
@@ -462,6 +468,17 @@ data Frame
   }
   deriving (Show, Eq, Generic)
 
+instance Default Frame where
+  def
+    = Frame
+    { fSize = 0
+    , fOrigin = 0
+    , fTagged = AllTagged
+    , fAddressable = HasFrameAddress
+    , fProtocol = 1024
+    , fSource = UniqueSource 0
+    }
+
 instance NFData Frame where
   rnf
     = genericRnfV1
@@ -480,6 +497,17 @@ data FrameAddress
   , faSequence :: !Sequence
   }
   deriving (Show, Eq, Generic)
+
+instance Default FrameAddress where
+  def
+    = FrameAddress
+    { faTarget = word64leToTarget 0
+    , faReserved = UnusedMac $ Mac ((), (), (), (), (), ())
+    , faReserved2 = ()
+    , faAckRequired = NoAckRequired
+    , faResRequired = NoResRequired
+    , faSequence = Sequence 0
+    }
 
 instance NFData FrameAddress where
   rnf
@@ -503,6 +531,14 @@ data ProtocolHeader
   , phReserved2 :: !()
   }
   deriving (Show, Eq, Generic)
+
+instance Default ProtocolHeader where
+  def
+    = ProtocolHeader
+    { phReserved = 0
+    , phType = Request $ DeviceMessageType GetServiceMessage
+    , phReserved2 = ()
+    }
 
 instance NFData ProtocolHeader where
   rnf
@@ -701,7 +737,7 @@ instance NFData DeviceReply where
     = genericRnfV1
 
 data LightReply
-  = StateReply
+  = StateLightReply
   | StateInfraredReply
   | StateLightPowerReply
   deriving (Show, Eq, Generic)
@@ -802,7 +838,7 @@ replyTypeToWord16le
     StateUnknown54Reply -> 55
     EchoReply -> 59
   lightReplyTypeToWord16le = \case
-    StateReply -> 107
+    StateLightReply -> 107
     StateLightPowerReply -> 118
     StateInfraredReply -> 121
   multiZoneReplyTypeToWord16le = \case
@@ -820,6 +856,8 @@ word16leToMessageType
   -> Either String MessageType
 word16leToMessageType 2
   = Right $ DeviceMessageType GetServiceMessage
+word16leToMessageType 12
+  = Right $ DeviceMessageType GetHostInfoMessage
 word16leToMessageType 14
   = Right $ DeviceMessageType GetHostFirmwareMessage
 word16leToMessageType 16
@@ -876,12 +914,19 @@ word16leToMessageType 502
 word16leToMessageType x
   = Left $ "no case for " <> show x
 
--- 13 15 17 19 are unused  33
 word16leToReplyType
   :: Word16le
   -> Either String ReplyType
 word16leToReplyType 3
   = Right $ DeviceReplyType StateServiceReply
+word16leToReplyType 13
+  = Right $ DeviceReplyType StateHostInfoReply
+word16leToReplyType 15
+  = Right $ DeviceReplyType StateHostFirmwareReply
+word16leToReplyType 17
+  = Right $ DeviceReplyType StateWifiInfoReply
+word16leToReplyType 19
+  = Right $ DeviceReplyType StateWifiFirmwareReply
 word16leToReplyType 22
   = Right $ DeviceReplyType StatePowerReply
 word16leToReplyType 25
@@ -902,7 +947,7 @@ word16leToReplyType 59
   = Right $ DeviceReplyType EchoReply
 
 word16leToReplyType 107
-  = Right $ LightReplyType StateReply
+  = Right $ LightReplyType StateLightReply
 word16leToReplyType 118
   = Right $ LightReplyType StateLightPowerReply
 word16leToReplyType 121
@@ -1179,21 +1224,21 @@ instance WithSize GetLightPower where
 
 data SetLightPower
   = SetLightPower
-  { slpLevel :: LightPower
-  , slpDuration :: Word32le --ms
+  { selpLevel :: LightPower
+  , selpDuration :: Word32le --ms
   }
   deriving Show
 
 instance Binary SetLightPower where
   put SetLightPower {..}
     = do
-    Bin.put slpLevel
-    Bin.put slpDuration
+    Bin.put selpLevel
+    Bin.put selpDuration
 
   get
     = do
-    slpLevel <- Bin.get
-    slpDuration <- Bin.get
+    selpLevel <- Bin.get
+    selpDuration <- Bin.get
     pure $ SetLightPower {..}
 
 instance MessageId SetLightPower where
@@ -1204,6 +1249,105 @@ instance MessageId SetLightPower where
 instance WithSize SetLightPower where
   size
     = const 6
+
+data SetWaveform
+  = SetWaveform
+  { sewReserved :: Word8
+  , sewTransient :: Word8  -- 8-bit integer as 0 or 1	Color does not persist.
+  , sewColor :: HSBK  --Hsbk	Light end color.
+  , sewPeriod :: Word32le  --unsigned 32-bit integer	Duration of a cycle in milliseconds.
+  , sewCycles :: Float32le -- 32-bit float	Number of cycles.
+  , sewSkewRatio :: Int16le  --signed 16-bit integer	Waveform Skew, [-32768, 32767] scaled to [0, 1].
+  , sewWaveform :: Word8  --unsigned 8-bit integer	Waveform to use for transition.
+  }
+  deriving Show
+
+instance Binary SetWaveform where
+  put SetWaveform {..}
+    = do
+    Bin.put sewReserved
+    Bin.put sewTransient
+    Bin.put sewColor
+    Bin.put sewPeriod
+    Bin.put sewCycles
+    Bin.put sewSkewRatio
+    Bin.put sewWaveform
+
+  get
+    = do
+    sewReserved <- Bin.get
+    sewTransient <- Bin.get
+    sewColor <- Bin.get
+    sewPeriod <- Bin.get
+    sewCycles <- Bin.get
+    sewSkewRatio <- Bin.get
+    sewWaveform <- Bin.get
+    pure $ SetWaveform {..}
+
+instance MessageId SetWaveform where
+  type StateReply SetWaveform = StateLight
+  msgId = const 103
+  msgTyp = const $ LightMessageType SetWaveformMessage
+
+instance WithSize SetWaveform where
+  size
+    = const (1 + 1 + 8 + 4 + 4 + 2 + 1)
+
+
+data SetWaveformOptional
+  = SetWaveformOptional
+  { sewoReserved :: Word8
+  , sewoTransient :: Word8  -- 8-bit integer as 0 or 1	Color does not persist.
+  , sewoColor :: HSBK  --Hsbk	Light end color.
+  , sewoPeriod :: Word32le  --unsigned 32-bit integer	Duration of a cycle in milliseconds.
+  , sewoCycles :: Float32le -- 32-bit float	Number of cycles.
+  , sewoSkewRatio :: Int16le  --signed 16-bit integer	Waveform Skew, [-32768, 32767] scaled to [0, 1].
+  , sewoWaveform :: Word8  --unsigned 8-bit integer	Waveform to use for transition.
+  , sewoSetHue :: Word8  -- 8-bit integer as 0 or 1
+  , sewoSetSaturation :: Word8  -- 8-bit integer as 0 or 1
+  , sewoSetBrightness :: Word8  -- 8-bit integer as 0 or 1
+  , sewoSetKelvin :: Word8  -- 8-bit integer as 0 or 1
+  }
+  deriving Show
+
+instance Binary SetWaveformOptional where
+  put SetWaveformOptional {..}
+    = do
+    Bin.put sewoReserved
+    Bin.put sewoTransient
+    Bin.put sewoColor
+    Bin.put sewoPeriod
+    Bin.put sewoCycles
+    Bin.put sewoSkewRatio
+    Bin.put sewoWaveform
+    Bin.put sewoSetHue
+    Bin.put sewoSetSaturation
+    Bin.put sewoSetBrightness
+    Bin.put sewoSetKelvin
+
+  get
+    = do
+    sewoReserved <- Bin.get
+    sewoTransient <- Bin.get
+    sewoColor <- Bin.get
+    sewoPeriod <- Bin.get
+    sewoCycles <- Bin.get
+    sewoSkewRatio <- Bin.get
+    sewoWaveform <- Bin.get
+    sewoSetHue <- Bin.get
+    sewoSetSaturation <- Bin.get
+    sewoSetBrightness <- Bin.get
+    sewoSetKelvin <- Bin.get
+    pure $ SetWaveformOptional {..}
+
+instance MessageId SetWaveformOptional where
+  type StateReply SetWaveformOptional = StateLight
+  msgId = const 119
+  msgTyp = const $ LightMessageType SetWaveformOptionalMessage
+
+instance WithSize SetWaveformOptional where
+  size
+    = const (1 + 1 + 8 + 4 + 4 + 2 + 1 + 1 + 1 + 1 + 1)
 
 data GetLight
   = GetLight
@@ -1260,11 +1404,69 @@ instance Binary StateLight where
 
 instance WithSize StateLight where
   size
-    = const $ size (undefined :: HSBK) + (2 + 2 + 32 + 8)
+    = const $ 8 + (2 + 2 + 32 + 8)
 
 instance WithSize GetLight where
   size
     = const 0
+
+
+data GetInfrared
+  = GetInfrared
+  deriving Show
+
+instance Binary GetInfrared where
+  put
+    = const $ pure ()
+  get
+    = pure GetInfrared
+
+instance MessageId GetInfrared where
+  type StateReply GetInfrared = StateInfrared
+  msgId = const 120
+  msgTyp = const $ LightMessageType GetInfraredMessage
+
+instance WithSize GetInfrared where
+  size
+    = const 0
+
+newtype StateInfrared
+  = StateInfrared
+  { stiBrightness :: Word16le
+  }
+  deriving Show
+
+instance Binary StateInfrared where
+  put
+    = Bin.put . stiBrightness
+  get
+    = do
+    stiBrightness <- Bin.get
+    pure $ StateInfrared {..}
+
+instance WithSize StateInfrared where
+  size
+    = const 2
+
+data SetInfrared
+  = SetInfrared
+  { seiBrightness :: !Word16le }
+  deriving Show
+
+instance Binary SetInfrared where
+  put
+    = Bin.put . seiBrightness
+  get
+    = SetInfrared <$> Bin.get
+
+instance WithSize SetInfrared where
+  size
+    = const 2
+
+
+
+
+
 
 
 data GetLabel
@@ -1822,6 +2024,10 @@ instance Binary SetLabel where
   get
     = SetLabel <$> Bin.get
 
+instance WithSize SetLabel where
+  size
+    = const 32
+
 data State
   = State
   { sColor :: !HSBK
@@ -1866,9 +2072,9 @@ instance WithSize Acknowledgement where
 --                        ui|hsbk|ui
 data SetColor
   = SetColor
-  { scReserved :: !()
-  , scColor :: !HSBK
-  , scDuration :: !Word32le -- ms
+  { secReserved :: !()
+  , secColor :: !HSBK
+  , secDuration :: !Word32le -- ms
   }
   deriving Show
 
@@ -1876,14 +2082,14 @@ instance Binary SetColor where
   put _sc@SetColor {..}
     = do
     BinP.putWord8 0
-    Bin.put scColor
-    Bin.put scDuration
+    Bin.put secColor
+    Bin.put secDuration
 
   get
     = do
-    scReserved <- () <$ BinG.getWord8
-    scColor <- Bin.get
-    scDuration <- Bin.get
+    secReserved <- () <$ BinG.getWord8
+    secColor <- Bin.get
+    secDuration <- Bin.get
     pure $ SetColor {..}
 
 instance MessageId SetColor where
@@ -1893,7 +2099,7 @@ instance MessageId SetColor where
 
 instance WithSize SetColor where
   size SetColor {..}
-    = 1 + size scColor + 4
+    = 1 + size secColor + 4
 
 
 data GetService
@@ -2336,13 +2542,18 @@ data SharedState
 
 data Light
   = Light
-  { lDevice :: Device
-  , lGroup :: Maybe (Label "group")
-  , lLocation :: Maybe (Label "location")
-  , lLabel :: Maybe (Label "name")
-  , lColor :: Maybe HSBK
-  , lPower :: Maybe LightPower
-  , lProduct :: Maybe ProductId
+  { lDevice                 :: !Device
+  , lGroup                  :: !(Maybe (Label "group"))
+  , lLocation               :: !(Maybe (Label "location"))
+  , lLabel                  :: !(Maybe (Label "name"))
+  , lColor                  :: !(Maybe HSBK)
+  , lPower                  :: !(Maybe LightPower)
+  , lProduct                :: !(Maybe ProductId)
+  , lHardwareVersion        :: !(Maybe HardwareVersion)
+  , lHostFirmwareBuild      :: !(Maybe Word64le)
+  , lHostFirmwareVersion    :: !(Maybe Word32le)
+  , lWifiFirmwareBuild      :: !(Maybe Word64le)
+  , lWifiFirmwareVersion    :: !(Maybe Word32le)
   }
   deriving (Show, Eq)
 
@@ -2518,9 +2729,8 @@ onStateService
   -> SockAddr
   -> BSL.ByteString
   -> IO ()
-onStateService ss@(SharedState {..}) packet@(Packet {..}) sa _orig
+onStateService ss@(SharedState {..}) Packet {..} sa _orig
   = do
-  logStr $ "Got State Service " <> show packet
   forM_ (socketAddrToDeviceSocketAddr sa) $ \sa' -> do
     let
       incomingDevice = Device sa' (DeviceId $ unTarget $ faTarget pFrameAddress)
@@ -2531,15 +2741,33 @@ onStateService ss@(SharedState {..}) packet@(Packet {..}) sa _orig
           if (lDevice l /= incomingDevice && False)
           then do
             --writeTVar ssDevices $ HM.insert (dDeviceId incomingDevice) (Light incomingDevice Nothing Nothing Nothing Nothing Nothing) devs
-            pure $ map (flip uncurry (ss, incomingDevice)) [getLocation, getGroup, getLabel, getLightPower, getLight, getVersion]
+            pure $ map (flip uncurry (ss, incomingDevice)) queries
           else pure []
         Nothing -> do
-          writeTVar ssDevices $ HM.insert (dDeviceId incomingDevice) (Light incomingDevice Nothing Nothing Nothing Nothing Nothing Nothing) devs
-          pure $ map (flip uncurry (ss, incomingDevice)) [getLocation, getGroup, getLabel, getLightPower, getLight, getVersion]
+          writeTVar ssDevices
+            $ HM.insert
+                (dDeviceId incomingDevice)
+                (Light
+                  incomingDevice
+                  Nothing
+                  Nothing
+                  Nothing
+                  Nothing
+                  Nothing
+                  Nothing
+                  Nothing
+                  Nothing
+                  Nothing
+                  Nothing
+                  Nothing
+                )
+                devs
+          pure $ map (flip uncurry (ss, incomingDevice)) queries
 
     sequence_ moreInfo
   where
     StateService {..} = pPayload
+    queries = [getLocation, getGroup, getLabel, getLightPower, getLight, getVersion, getHostFirmware, getWifiFirmware]
 
 sendToDevice
   :: ( Binary a
@@ -2548,13 +2776,83 @@ sendToDevice
   -> Device
   -> Packet a
   -> IO ()
-sendToDevice SharedState {..} d@(Device {..}) packet
-  = (printIt $ "Sending to: " <> show d <> " Data: " <> show (BSL16.encode bytes)) >>
-    sendManyTo ssSocket (BSL.toChunks bytes) (SockAddrInet p w)
+sendToDevice SharedState {..} Device {..} packet
+  = sendManyTo ssSocket (BSL.toChunks bytes) (SockAddrInet p w)
   where
     DeviceSocketAddress p (DeviceAddress (unWord32le -> w)) = dAddr
     bytes = Bin.encode np
     np = packet { pFrameAddress = (pFrameAddress packet) { faTarget = deviceIdToTarget dDeviceId} }
+
+updateWifiFirmware
+  :: SharedState
+  -> Device
+  -> Packet StateWifiFirmware
+  -> IO ()
+updateWifiFirmware SharedState {..} Device {..} Packet {..}
+  = do
+  atomically $ do
+    devs <- readTVar ssDevices
+    let
+      newDevs = HM.adjust
+        (\l@(Light {..}) ->
+          l { lWifiFirmwareBuild = Just stwfBuild
+            , lWifiFirmwareVersion = Just stwfVersion
+            }
+        )
+        dDeviceId
+        devs
+    writeTVar ssDevices newDevs
+  where
+    StateWifiFirmware {..} = pPayload
+
+
+getWifiFirmware
+  :: SharedState
+  -> Device
+  -> IO ()
+getWifiFirmware ss d
+  = do
+  outerGet ss d GetWifiFirmware $ \_ p@(Packet {..}) _ _ -> do
+    let
+      StateWifiFirmware {..} = pPayload
+    printIt $ "Got wifi firmware: " <> show p
+    updateWifiFirmware ss d p
+
+updateHostFirmware
+  :: SharedState
+  -> Device
+  -> Packet StateHostFirmware
+  -> IO ()
+updateHostFirmware SharedState {..} Device {..} Packet {..}
+  = do
+  atomically $ do
+    devs <- readTVar ssDevices
+    let
+      newDevs = HM.adjust
+        (\l@(Light {..}) ->
+          l { lHostFirmwareBuild = Just sthfBuild
+            , lHostFirmwareVersion = Just sthfVersion
+            }
+        )
+        dDeviceId
+        devs
+    writeTVar ssDevices newDevs
+  where
+    StateHostFirmware {..} = pPayload
+
+
+getHostFirmware
+  :: SharedState
+  -> Device
+  -> IO ()
+getHostFirmware ss d
+  = do
+  outerGet ss d GetHostFirmware $ \_ p@(Packet {..}) _ _ -> do
+    let
+      StateHostFirmware {..} = pPayload
+    printIt $ "Got host firmware: " <> show p
+    updateHostFirmware ss d p
+
 
 updateVersion
   :: SharedState
@@ -2566,7 +2864,14 @@ updateVersion SharedState {..} Device {..} Packet {..}
   atomically $ do
     devs <- readTVar ssDevices
     let
-      newDevs = HM.adjust (\l@(Light {..}) -> l { lProduct = Just stvProduct } ) dDeviceId devs
+      newDevs = HM.adjust
+        (\l@(Light {..}) ->
+          l { lProduct = Just stvProduct
+            , lHardwareVersion = Just stvVersion
+            }
+        )
+        dDeviceId
+        devs
     writeTVar ssDevices newDevs
   where
     StateVersion {..} = pPayload
