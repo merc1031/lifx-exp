@@ -262,6 +262,7 @@ lightReceiveThread nic ss bulbM
         let
           payloadE = runExcept $ withExcept MorphedPayloadError $ decodePacket @SetLabel header rest
         forM payloadE $ \Packet { pPayload } -> do
+          print $ "Told to set label to " <> show pPayload
           t <- getCurrentLifxUTC
           label <- atomically $ do
             modifyTVar' bulbM (\b -> b { fbState = (fbState b) { fbsLabel = selLabel pPayload }})
@@ -285,7 +286,9 @@ lightReceiveThread nic ss bulbM
         let
           payloadE = runExcept $ withExcept MorphedPayloadError $ decodePacket @SetColor header rest
         forM payloadE $ \p@(Packet { pPayload = SetColor {..} }) -> do
+          print $ "********************************************************************************************************"
           print $ "Set Color Payload " <> show (pPayload p)
+          print $ "********************************************************************************************************"
           -- Should really spion off a thread to handle the duration aspect of chaning color...
           FakeBulbState {..} <- atomically $ do
             modifyTVar' bulbM (\b -> b { fbState = (fbState b) { fbsColor = secColor }})
@@ -302,7 +305,6 @@ lightReceiveThread nic ss bulbM
               (Reply $ LightReplyType StateLightReply)
               (StateLight fbsColor 0 fbsLightPowerLevel fbsLabel 0)
 
-          print packet
           pure $ shouldRespond header (BSL.toChunks bytes)
 --          pure $ YesResponse (BSL.toChunks bytes)
       (Request (LightMessageType SetLightPowerMessage)) -> do
@@ -371,10 +373,13 @@ lightReceiveThread nic ss bulbM
               (StateInfrared infraredBrightness)
 
           pure $ shouldRespond header (BSL.toChunks bytes)
-      (Request (LightMessageType SetWaveformOptionalMessage)) -> do
+      (Request (LightMessageType SetWaveformMessage)) -> do
         let
-          payloadE = runExcept $ withExcept MorphedPayloadError $ decodePacket @SetWaveformOptional header rest
-        forM payloadE $ \payload -> do
+          payloadE = runExcept $ withExcept MorphedPayloadError $ decodePacket @SetWaveform header rest
+        forM payloadE $ \p@(Packet { pPayload = SetWaveform {..} }) -> do
+          print $ "********************************************************************************************************"
+          print $ "Set Waveform Payload " <> show (pPayload p)
+          print $ "********************************************************************************************************"
           FakeBulbState {..} <- atomically $ fbState <$> readTVar bulbM
           let
             bytes = Bin.encode packet
@@ -385,7 +390,29 @@ lightReceiveThread nic ss bulbM
               NoAckRequired
               NoResRequired
               sequ
-              (Reply $ DeviceReplyType StateGroupReply)
+              (Reply $ LightReplyType StateLightReply)
+              (StateLight fbsColor 0 fbsLightPowerLevel fbsLabel 0)
+
+          print packet
+          pure $ YesResponse (BSL.toChunks bytes)
+      (Request (LightMessageType SetWaveformOptionalMessage)) -> do
+        let
+          payloadE = runExcept $ withExcept MorphedPayloadError $ decodePacket @SetWaveformOptional header rest
+        forM payloadE $ \p@(Packet { pPayload = SetWaveformOptional {..} }) -> do
+          print $ "********************************************************************************************************"
+          print $ "Set Waveform Optional Payload " <> show (pPayload p)
+          print $ "********************************************************************************************************"
+          FakeBulbState {..} <- atomically $ fbState <$> readTVar bulbM
+          let
+            bytes = Bin.encode packet
+            packet = mkTestPacket
+              SingleTagged
+              uniqS
+              nicToTarget
+              NoAckRequired
+              NoResRequired
+              sequ
+              (Reply $ LightReplyType StateLightReply)
               (StateLight fbsColor 0 fbsLightPowerLevel fbsLabel 0)
 
           print packet
@@ -489,8 +516,8 @@ instance Default FakeBulb where
     , fbWifiFirmware = def
     , fbVersion = def
     , fbState = def { fbsLabel = Label "Fake Light" }
-    , fbLocation = def { fblLabel = Label "Home" }
-    , fbGroup = def { fbgLabel = Label "Lab" }
+    , fbLocation = def
+    , fbGroup = def
     , fbStartTime = LifxUTC 0
     , fbPowerThread = undefined
     }
@@ -566,8 +593,8 @@ data FakeBulbLocation
 instance Default FakeBulbLocation where
   def
     = FakeBulbLocation
-    { fblLocationId = def
-    , fblLabel = def
+    { fblLocationId = LocationId $ ByteId16 [191,85,176,70,10,79,235,23,234,91,5,109,79,82,97,227]
+    , fblLabel = Label "Home"
     }
 
 data FakeBulbGroup
@@ -580,8 +607,8 @@ data FakeBulbGroup
 instance Default FakeBulbGroup where
   def
     = FakeBulbGroup
-    { fbgGroupId = def
-    , fbgLabel = def
+    { fbgGroupId = GroupId $ ByteId16 [47,223,129,99,224,228,225,11,76,216,163,23,127,156,239,247]
+    , fbgLabel = Label "Lab"
     }
 
 data FakeBulbState
@@ -598,7 +625,7 @@ instance Default FakeBulbState where
     = FakeBulbState
     { fbsColor = def
     , fbsLightPowerLevel = LightPower 0
-    , fbsLabel = Label ""
+    , fbsLabel = Label "Fake Light"
     , fbsInfraredBrightness = 0
     }
 
