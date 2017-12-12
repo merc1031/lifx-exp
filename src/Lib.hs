@@ -73,6 +73,8 @@ import            Data.Char                     ( intToDigit, isPrint )
 import            Data.Coerce
 import            Data.Default
 import            Data.Functor.Identity         ( Identity )
+import            Data.Generics.Product
+import            Data.Generics.Sum
 import            Data.Hashable                 ( Hashable )
 import            Data.Int                      ( Int8
                                                 , Int16
@@ -2340,9 +2342,9 @@ extract'
   -> Int
   -> (b, a)
 extract' x m n
-  = (fromIntegral field, shifted)
+  = (fromIntegral extracted, shifted)
   where
-    field = shifted .&. bmask
+    extracted = shifted .&. bmask
     shifted = x `shiftR` m
     bmask = bit w - 1
     w = n - m

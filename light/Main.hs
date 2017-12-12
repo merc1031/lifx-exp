@@ -1,5 +1,6 @@
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE DeriveGeneric   #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE OverloadedStrings #-}
@@ -22,6 +23,11 @@ import Control.Concurrent.STM
 import Control.Exception
 import Data.Default
 import Data.Word
+import            Data.Function
+import            Data.Generics.Internal.Lens
+import            Data.Generics.Product
+import            Data.Generics.Sum
+import            GHC.Generics
 import qualified Data.Time.Clock.POSIX as POSIX
 import Options.Applicative
 import Data.Semigroup ((<>))
@@ -265,7 +271,7 @@ lightReceiveThread nic ss bulbM
           print $ "Told to set label to " <> show pPayload
           t <- getCurrentLifxUTC
           label <- atomically $ do
-            modifyTVar' bulbM (\b -> b { fbState = (fbState b) { fbsLabel = selLabel pPayload }})
+            modifyTVar' bulbM (& typed @FakeBulbState . typed @(Label "name") .~ (selLabel pPayload))
             fbsLabel . fbState <$> readTVar bulbM
 
 
@@ -291,7 +297,7 @@ lightReceiveThread nic ss bulbM
           print $ "********************************************************************************************************"
           -- Should really spion off a thread to handle the duration aspect of chaning color...
           FakeBulbState {..} <- atomically $ do
-            modifyTVar' bulbM (\b -> b { fbState = (fbState b) { fbsColor = secColor }})
+            modifyTVar' bulbM (& typed @FakeBulbState . typed @HSBK .~ secColor)
             fbState <$> readTVar bulbM
           let
             bytes = Bin.encode packet
@@ -331,7 +337,7 @@ lightReceiveThread nic ss bulbM
                 let
                   percentage = (now - start) / (fromIntegral end - start)
                   smear = lightPowerLevel + ((unLightPower selpLevel - lightPowerLevel) * floor percentage)
-                atomically $ modifyTVar' bulbM (\b -> b { fbState = (fbState b) { fbsLightPowerLevel = LightPower smear }})
+                atomically $ modifyTVar' bulbM (& typed @FakeBulbState . typed @LightPower .~ LightPower smear)
                 -- start = 10     end = 40      now = 20
                 --         20           80
                 when (floor now < end)
@@ -357,7 +363,7 @@ lightReceiveThread nic ss bulbM
           payloadE = runExcept $ withExcept MorphedPayloadError $ decodePacket @SetInfrared header rest
         forM payloadE $ \Packet { pPayload } -> do
           infraredBrightness <- atomically $ do
-            modifyTVar' bulbM (\b -> b { fbState = (fbState b) { fbsInfraredBrightness = seiBrightness pPayload }})
+            modifyTVar' bulbM (& typed @FakeBulbState . typed @Word16le .~ seiBrightness pPayload)
             fbsInfraredBrightness . fbState <$> readTVar bulbM
 
           let
@@ -490,6 +496,7 @@ data FakeBulb
   , fbStartTime    :: !LifxUTC
   , fbPowerThread  :: (TVar (Maybe (Async ())))
   }
+  deriving Generic
 
 instance Show FakeBulb where
   show FakeBulb {..}
@@ -527,7 +534,7 @@ data FakeBulbFirmware
   { fbfBuild :: Word64le
   , fbfVersion :: Word32le
   }
-  deriving Show
+  deriving (Show, Generic)
 
 
 instance Default FakeBulbFirmware where
@@ -543,7 +550,7 @@ data FakeBulbWifiInfo
   , fbwiTx :: Word32le
   , fbwiRx :: Word32le
   }
-  deriving Show
+  deriving (Show, Generic)
 
 instance Default FakeBulbWifiInfo where
   def
@@ -558,7 +565,7 @@ data FakeBulbWifiFirmware
   { fbwfBuild :: Word64le
   , fbwfVersion :: Word32le
   }
-  deriving Show
+  deriving (Show, Generic)
 
 instance Default FakeBulbWifiFirmware where
   def
@@ -573,7 +580,7 @@ data FakeBulbVersion
   , fbvProduct :: ProductId
   , fbvVersion :: Word32le
   }
-  deriving Show
+  deriving (Show, Generic)
 
 instance Default FakeBulbVersion where
   def
@@ -588,7 +595,7 @@ data FakeBulbLocation
   { fblLocationId :: LocationId
   , fblLabel :: Label "location"
   }
-  deriving Show
+  deriving (Show, Generic)
 
 instance Default FakeBulbLocation where
   def
@@ -602,7 +609,7 @@ data FakeBulbGroup
   { fbgGroupId :: GroupId
   , fbgLabel :: Label "group"
   }
-  deriving Show
+  deriving (Show, Generic)
 
 instance Default FakeBulbGroup where
   def
@@ -618,7 +625,7 @@ data FakeBulbState
   , fbsLabel :: Label "name"
   , fbsInfraredBrightness :: Word16le
   }
-  deriving Show
+  deriving (Show, Generic)
 
 instance Default FakeBulbState where
   def
