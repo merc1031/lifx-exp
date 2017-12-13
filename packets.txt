@@ -205,3 +205,31 @@ faResRequired :: ResRequired
 [-1: /home/leo/dev/local/lifx-exp/src/Lib.hs:479:5-17] [-1: /home/leo/dev/local/lifx-exp/src/Lib.hs:479:5-17] *Main Lib>
 
 
+
+
+
+
+  ssLogLevel <- runMaybeT $ do
+    (MaybeT $ maybe (Just LogError) toLogLevel <$> lookupEnv "LOG_LEVEL") <|> (MaybeT $ pure $ Just LogError)
+
+
+
+Theater Lamp
+
+        { dAddr = DeviceSocketAddress 56700 IP
+            ( 192
+            , 168
+            , 1
+            , 207
+            )
+        , dDeviceId = Mac
+            { unMac =
+                ( 208
+                , 115
+                , 213
+                , 37
+                , 125
+                , 157
+                )
+            }( d0:73:d5:25:7d:9d )
+

@@ -11,6 +11,7 @@ import            Data.Semigroup ((<>))
 import            Data.Void
 import            Lib
 import            Options.Applicative
+import            System.Environment
 import            Text.Pretty.Simple
 import qualified  Data.Binary     as Bin
 import qualified  Data.List       as L
@@ -65,6 +66,7 @@ main
   :: IO ()
 main
   = do
+  setEnv "LOG_LEVEL" "DEBUG"
   Config {..} <- customExecParser p opts
   r <- mkState
   threadDelay 3000000

@@ -15,6 +15,7 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE PolyKinds #-}
+{-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE StandaloneDeriving #-}
@@ -50,6 +51,7 @@ import            Control.Monad.IO.Class        ( MonadIO
                                                 )
 import            Control.Monad.Trans.Except
 import            Control.Monad.Trans.Control
+import            Control.Monad.Trans.Maybe
 import            Data.Array.MArray             ( writeArray
                                                 , readArray
                                                 , newArray_
@@ -69,7 +71,10 @@ import            Data.Bits                     ( zeroBits
                                                 , testBit
                                                 )
 import            Data.Bool                     ( bool )
-import            Data.Char                     ( intToDigit, isPrint )
+import            Data.Char                     ( intToDigit
+                                                , isPrint
+                                                , toLower
+                                                )
 import            Data.Coerce
 import            Data.Default
 import            Data.Functor.Identity         ( Identity )
@@ -81,7 +86,9 @@ import            Data.Int                      ( Int8
                                                 , Int32
                                                 , Int64
                                                 )
-import            Data.Maybe                    ( isJust )
+import            Data.Maybe                    ( isJust
+                                                , fromJust
+                                                )
 import            Data.Monoid                   ( (<>) )
 import            Data.Proxy
 import            Data.Time.Clock
@@ -111,6 +118,7 @@ import            Network.Socket                ( Socket (..)
 import            Network.Socket.ByteString
 import            Numeric                       ( showHex )
 import            Text.Printf
+import            System.Environment
 --import            Test.QuickCheck               (Arbitrary (..) )
 import qualified  Data.Binary                   as Bin
 import qualified  Data.Binary.Bits              as Bits
@@ -2540,6 +2548,8 @@ data SharedState
   , ssSocket         :: !Socket
   , ssNextSeq        :: !(IO Sequence)
   , ssUniqueSource   :: !UniqueSource
+  , ssLogLevel       :: !LogLevel
+  , ssLogFunction    :: !(LogLevel -> String -> IO ())
   }
 
 data Light
@@ -2817,7 +2827,7 @@ getWifiFirmware ss d
   outerGet ss d GetWifiFirmware $ \_ p@(Packet {..}) _ _ -> do
     let
       StateWifiFirmware {..} = pPayload
-    printIt $ "Got wifi firmware: " <> show p
+    ssLogFunction ss LogDebug $ "Got wifi firmware: " <> show p
     updateWifiFirmware ss d p
 
 updateHostFirmware
@@ -2852,7 +2862,7 @@ getHostFirmware ss d
   outerGet ss d GetHostFirmware $ \_ p@(Packet {..}) _ _ -> do
     let
       StateHostFirmware {..} = pPayload
-    printIt $ "Got host firmware: " <> show p
+    ssLogFunction ss LogDebug $ "Got host firmware: " <> show p
     updateHostFirmware ss d p
 
 
@@ -2888,7 +2898,7 @@ getVersion ss d
   outerGet ss d GetVersion $ \_ p@(Packet {..}) _ _ -> do
     let
       StateVersion {..} = pPayload
-    printIt $ "Got version: " <> show p
+    ssLogFunction ss LogDebug $ "Got version: " <> show p
     updateVersion ss d p
 
 updateLocation
@@ -2916,7 +2926,7 @@ getLocation ss d
   outerGet ss d GetLocation $ \_ p@(Packet {..}) _ _ -> do
     let
       StateLocation {..} = pPayload
-    printIt $ "Got location: " <> show p
+    ssLogFunction ss LogDebug $ "Got location: " <> show p
     updateLocation ss d p
 
 
@@ -2943,7 +2953,7 @@ getGroup ss d
   = outerGet ss d GetGroup $ \_ p@(Packet {..}) _ _ -> do
   let
     StateGroup {..} = pPayload
-  printIt $ "Got Group: " <> show p
+  ssLogFunction ss LogDebug $ "Got Group: " <> show p
   updateGroup ss d p
 
 updateLabel
@@ -2969,7 +2979,7 @@ getLabel ss d
   = outerGet ss d GetLabel $ \_ p@(Packet {..}) _ _ -> do
   let
     StateLabel {..} = pPayload
-  printIt $ "Got Label: " <> show p
+  ssLogFunction ss LogDebug $ "Got Label: " <> show p
   updateLabel ss d p
 
 updateLightPower
@@ -2995,7 +3005,7 @@ getLightPower ss d
   = outerGet ss d GetLightPower $ \_ p@(Packet {..}) _ _ -> do
   let
     StateLightPower {..} = pPayload
-  printIt $ "Got LightPower: " <> show p
+  ssLogFunction ss LogDebug $ "Got LightPower: " <> show p
   updateLightPower ss d p
 
 updateLight
@@ -3030,7 +3040,7 @@ getLight ss d
   = outerGet ss d GetLight $ \_ p@(Packet {..}) _ _ -> do
   let
     StateLight {..} = pPayload
-  printIt $ "Got Light: " <> show p
+  ssLogFunction ss LogDebug $ "Got Light: " <> show p
   updateLight ss d p
 
 outerGet
@@ -3048,23 +3058,6 @@ outerGet ss d pay cb
     fp = p pay
     np = fp { pFrameAddress = (pFrameAddress fp) { faTarget = deviceIdToTarget $ dDeviceId d} }
   sendToDevice ss d np
-
-logStr
-  :: String
-  -> IO ()
-logStr x
-  = print space >> print x >> print space
-  where
-    space
-      :: String
-    space = ""
-
-printIt
-  :: Show a
-  => a
-  -> IO ()
-printIt (show -> s)
-  = logStr s
 
 data FoundDevice
   = FoundDevice
@@ -3158,10 +3151,36 @@ setCallbackForSeq SharedState {..} sequ cont
   $ atomically
   $ writeArray ssReplyCallbacks (unSequence sequ) cont
 
+data LogLevel
+  = LogDebug
+  | LogInfo
+  | LogError
+  deriving (Eq, Ord, Show)
+
+toLogLevel
+  :: String
+  -> Maybe LogLevel
+toLogLevel (map toLower -> s)
+  = go s
+  where
+    go = \case
+      "error" -> Just LogError
+      "info" -> Just LogInfo
+      "debug" -> Just LogDebug
+      _ -> Nothing
+
 mkState
   :: IO AppState
 mkState
   = do
+  ssLogLevel <- fromJust . (maybe (Just LogError) toLogLevel) <$> lookupEnv "LOG_LEVEL"
+
+  let
+    ssLogFunction onLevel msg
+      = do
+      when (onLevel >= ssLogLevel) $
+        putStrLn msg
+
   nSeq <- newTVarIO (Sequence 0)
   ssNextSeq <- pure $ atomically $ do
     val@(Sequence inner) <- readTVar nSeq
