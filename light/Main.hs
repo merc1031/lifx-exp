@@ -29,6 +29,7 @@ import            Control.Concurrent
 import            Control.Concurrent.Async
 import            Control.Concurrent.STM
 import            Control.Exception
+import            Control.Lens.Reified
 import            Control.Monad
 import            Data.Default
 import            Data.Semigroup              ( (<>) )
@@ -523,7 +524,9 @@ lightReceiveThread nic ss bulbM
 
           (FakeBulbState {..}, label)
             <- atomically
-                $ (fbState &&& (^. typed @(Label "name")))
+--              $ (fbState &&& (^. typed @(Label "name")))  -- | Simple arrow
+--                $ ((. field @"fbState") &&& (^. typed @(Label "name")))  -- | Arrowed full lens
+                $ (^. (runGetter $ (,) <$> Getter (field @"fbState") <*>  Getter (typed @(Label "name"))))  -- | General lens composition
               <$> readTVar bulbM
 
           let
@@ -598,6 +601,35 @@ lightReceiveThread nic ss bulbM
       NoResRequired
       sequ
 
+
+
+{-
+
+variadicFunction :: VariadicReturnClass r => RequiredArgs -> r
+variadicFunction reqArgs = variadicImpl reqArgs mempty
+
+class VariadicReturnClass r where
+   variadicImpl :: RequiredArgs -> AccumulatingType -> r
+
+instance VariadicReturnClass ActualReturnType where
+   variadicImpl reqArgs acc = constructActualResult reqArgs acc
+
+instance (ArgClass a, VariadicReturnClass r) => VariadicReturnClass (a -> r) where
+   variadicImpl reqArgs acc = \a -> variadicImpl reqArgs (specialize a `mappend` acc)
+
+-}
+
+--getFields :: ManyGetter r => r
+--getFields = getters
+--
+--class ManyGetter r where
+--   getters :: AccumulatingType -> r
+--
+--instance VariadicReturnClass ActualReturnType where
+--   variadicImpl reqArgs acc = constructActualResult reqArgs acc
+--
+--instance (ArgClass a, VariadicReturnClass r) => VariadicReturnClass (a -> r) where
+--   variadicImpl reqArgs acc = \a -> variadicImpl reqArgs (specialize a `mappend` acc)
 
 data FakeBulb
   = FakeBulb
