@@ -1,10 +1,12 @@
 module Main where
 
-import Lib
 import Control.Concurrent.Async
+import Lib
 
-main :: IO ()
-main = do
+main
+  :: IO ()
+main
+  = do
   r <- mkState
   wait $ asReceiveThread r
   wait $ asDiscoveryThread r
