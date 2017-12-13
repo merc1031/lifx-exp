@@ -13,8 +13,10 @@
 {-# OPTIONS_GHC -fno-warn-unused-imports #-}
 module Main where
 
+import            Control.Arrow               ( first )
 import            Control.Monad               ( void )
 import            Control.Monad.Except
+import            Data.Binary                 ( Binary )
 import            Data.Function
 import            Data.Generics.Product
 import            Data.Generics.Sum
@@ -99,11 +101,9 @@ lightReceiveThread nic ss bulbM
   print @String "About to recv"
 
   replicateM_ 4 $ print @String spaces100
-  (!bs, sa) <- recvFrom ss 1500
+  (!bsl, sa) <- first BSL.fromStrict <$> recvFrom ss 1500
 
   let
-    bsl
-      = BSL.fromStrict bs
     headerE
       = runExcept
       $ decodeHeader Nothing bsl
@@ -134,24 +134,35 @@ lightReceiveThread nic ss bulbM
           Target
             $ Mac
             $ (0xd0, 0x74, 0x8f, 0x86, 0xbf, 0xaf)
+      pp
+        :: ( Binary a
+           , WithSize a
+           )
+        => Direction
+        -> a
+        -> Packet a
+      pp
+        = preamble
+        uniqS
+        nicToTarget
+        sequ
+      stream
+        :: Binary a
+        => Packet a
+        -> [BS.ByteString]
+      stream
+        = BSL.toChunks
+        . Bin.encode
 
     when (ackR == AckRequired) $ do
 
       let
-        bytes
-          = Bin.encode packet
         packet
-          = mkTestPacket
-          SingleTagged
-          uniqS
-          nicToTarget
-          NoAckRequired
-          NoResRequired
-          sequ
+          = pp
           (Reply $ DeviceReplyType AcknowledgementReply)
           (Acknowledgement)
         msg
-          = BSL.toChunks bytes
+          = stream packet
 
       sendManyTo ss msg sa
       incrTx msg
@@ -173,20 +184,12 @@ lightReceiveThread nic ss bulbM
         forM payloadE $ \_payload -> do
 
           let
-            bytes
-              = Bin.encode packet
             packet
-              = mkTestPacket
-              SingleTagged
-              uniqS
-              nicToTarget
-              NoAckRequired
-              NoResRequired
-              sequ
+              = pp
               (Reply $ DeviceReplyType StateServiceReply)
               (StateService 1 56700)
 
-          pure $ YesResponse (BSL.toChunks bytes)
+          pure $ YesResponse (stream packet)
       (Request (DeviceMessageType GetHostFirmwareMessage)) -> do
 
         let
@@ -199,20 +202,12 @@ lightReceiveThread nic ss bulbM
           FakeBulbFirmware {..} <- atomically $ fbFirmware <$> readTVar bulbM
 
           let
-            bytes
-              = Bin.encode packet
             packet
-              = mkTestPacket
-              SingleTagged
-              uniqS
-              nicToTarget
-              NoAckRequired
-              NoResRequired
-              sequ
+              = pp
               (Reply $ DeviceReplyType StateHostFirmwareReply)
               (StateHostFirmware fbfBuild 0 fbfVersion)
 
-          pure $ YesResponse (BSL.toChunks bytes)
+          pure $ YesResponse (stream packet)
       (Request (DeviceMessageType GetWifiFirmwareMessage)) -> do
 
         let
@@ -225,20 +220,12 @@ lightReceiveThread nic ss bulbM
           FakeBulbWifiFirmware {..} <- atomically $ fbWifiFirmware <$> readTVar bulbM
 
           let
-            bytes
-              = Bin.encode packet
             packet
-              = mkTestPacket
-              SingleTagged
-              uniqS
-              nicToTarget
-              NoAckRequired
-              NoResRequired
-              sequ
+              = pp
               (Reply $ DeviceReplyType StateWifiFirmwareReply)
               (StateWifiFirmware fbwfBuild 0 fbwfVersion)
 
-          pure $ YesResponse (BSL.toChunks bytes)
+          pure $ YesResponse (stream packet)
       (Request (DeviceMessageType GetWifiInfoMessage)) -> do
 
         let
@@ -251,20 +238,12 @@ lightReceiveThread nic ss bulbM
           FakeBulbWifiInfo {..} <- atomically $ fbWifiInfo <$> readTVar bulbM
 
           let
-            bytes
-              = Bin.encode packet
             packet
-              = mkTestPacket
-              SingleTagged
-              uniqS
-              nicToTarget
-              NoAckRequired
-              NoResRequired
-              sequ
+              = pp
               (Reply $ DeviceReplyType StateWifiInfoReply)
               (StateWifiInfo fbwiSignal fbwiTx fbwiRx 0)
 
-          pure $ YesResponse (BSL.toChunks bytes)
+          pure $ YesResponse (stream packet)
       (Request (LightMessageType GetLightMessage)) -> do
 
         let
@@ -277,20 +256,12 @@ lightReceiveThread nic ss bulbM
           FakeBulbState {..} <- atomically $ fbState <$> readTVar bulbM
 
           let
-            bytes
-              = Bin.encode packet
             packet
-              = mkTestPacket
-              SingleTagged
-              uniqS
-              nicToTarget
-              NoAckRequired
-              NoResRequired
-              sequ
+              = pp
               (Reply $ LightReplyType StateLightReply)
               (StateLight fbsColor 0 fbsLightPowerLevel fbsLabel 0)
 
-          pure $ YesResponse (BSL.toChunks bytes)
+          pure $ YesResponse (stream packet)
       (Request (DeviceMessageType GetVersionMessage)) -> do
 
         let
@@ -303,20 +274,12 @@ lightReceiveThread nic ss bulbM
           FakeBulbVersion {..} <- atomically $ fbVersion <$> readTVar bulbM
 
           let
-            bytes
-              = Bin.encode packet
             packet
-              = mkTestPacket
-              SingleTagged
-              uniqS
-              nicToTarget
-              NoAckRequired
-              NoResRequired
-              sequ
+              = pp
               (Reply $ DeviceReplyType StateVersionReply)
               (StateVersion def fbvProduct $ HardwareVersion 0)
 
-          pure $ YesResponse (BSL.toChunks bytes)
+          pure $ YesResponse (stream packet)
       (Request (DeviceMessageType GetLocationMessage)) -> do
 
         let
@@ -330,20 +293,12 @@ lightReceiveThread nic ss bulbM
           FakeBulbLocation {..} <- atomically $ fbLocation <$> readTVar bulbM
 
           let
-            bytes
-              = Bin.encode packet
             packet
-              = mkTestPacket
-              SingleTagged
-              uniqS
-              nicToTarget
-              NoAckRequired
-              NoResRequired
-              sequ
+              = pp
               (Reply $ DeviceReplyType StateLocationReply)
               (StateLocation fblLocationId fblLabel t)
 
-          pure $ YesResponse (BSL.toChunks bytes)
+          pure $ YesResponse (stream packet)
       (Request (DeviceMessageType GetGroupMessage)) -> do
 
         let
@@ -357,20 +312,12 @@ lightReceiveThread nic ss bulbM
           FakeBulbGroup {..} <- atomically $ fbGroup <$> readTVar bulbM
 
           let
-            bytes
-              = Bin.encode packet
             packet
-              = mkTestPacket
-              SingleTagged
-              uniqS
-              nicToTarget
-              NoAckRequired
-              NoResRequired
-              sequ
+              = pp
               (Reply $ DeviceReplyType StateGroupReply)
               (StateGroup fbgGroupId fbgLabel t)
 
-          pure $ YesResponse (BSL.toChunks bytes)
+          pure $ YesResponse (stream packet)
       (Request (DeviceMessageType SetLabelMessage)) -> do
 
         let
@@ -388,20 +335,12 @@ lightReceiveThread nic ss bulbM
 
 
           let
-            bytes
-              = Bin.encode packet
             packet
-              = mkTestPacket
-              SingleTagged
-              uniqS
-              nicToTarget
-              NoAckRequired
-              NoResRequired
-              sequ
+              = pp
               (Reply $ DeviceReplyType StateLabelReply)
               (StateLabel label)
 
-          pure $ shouldRespond decodedHeader (BSL.toChunks bytes)
+          pure $ shouldRespond decodedHeader (stream packet)
       (Request (LightMessageType SetColorMessage)) -> do
 
         let
@@ -419,21 +358,12 @@ lightReceiveThread nic ss bulbM
             fbState <$> readTVar bulbM
 
           let
-            bytes
-              = Bin.encode packet
             packet
-              = mkTestPacket
-              SingleTagged
-              uniqS
-              nicToTarget
-              NoAckRequired
-              NoResRequired
-              sequ
+              = pp
               (Reply $ LightReplyType StateLightReply)
               (StateLight fbsColor 0 fbsLightPowerLevel fbsLabel 0)
 
-          pure $ shouldRespond decodedHeader (BSL.toChunks bytes)
---          pure $ YesResponse (BSL.toChunks bytes)
+          pure $ shouldRespond decodedHeader (stream packet)
       (Request (LightMessageType SetLightPowerMessage)) -> do
 
         let
@@ -479,20 +409,12 @@ lightReceiveThread nic ss bulbM
           atomically $ modifyTVar' powerThreadV (const $ Just pThread)
 
           let
-            bytes
-              = Bin.encode packet
             packet
-              = mkTestPacket
-              SingleTagged
-              uniqS
-              nicToTarget
-              NoAckRequired
-              NoResRequired
-              sequ
+              = pp
               (Reply $ LightReplyType StateLightPowerReply)
               (StateLightPower $ LightPower lightPowerLevel)
 
-          pure $ shouldRespond decodedHeader (BSL.toChunks bytes)
+          pure $ shouldRespond decodedHeader (stream packet)
       (Request (LightMessageType SetInfraredMessage)) -> do
 
         let
@@ -507,20 +429,12 @@ lightReceiveThread nic ss bulbM
             fbsInfraredBrightness . fbState <$> readTVar bulbM
 
           let
-            bytes
-              = Bin.encode packet
             packet
-              = mkTestPacket
-              SingleTagged
-              uniqS
-              nicToTarget
-              NoAckRequired
-              NoResRequired
-              sequ
+              = pp
               (Reply $ LightReplyType StateInfraredReply)
               (StateInfrared infraredBrightness)
 
-          pure $ shouldRespond decodedHeader (BSL.toChunks bytes)
+          pure $ shouldRespond decodedHeader (stream packet)
       (Request (LightMessageType SetWaveformMessage)) -> do
 
         let
@@ -535,21 +449,13 @@ lightReceiveThread nic ss bulbM
           FakeBulbState {..} <- atomically $ fbState <$> readTVar bulbM
 
           let
-            bytes
-              = Bin.encode packet
             packet
-              = mkTestPacket
-              SingleTagged
-              uniqS
-              nicToTarget
-              NoAckRequired
-              NoResRequired
-              sequ
+              = pp
               (Reply $ LightReplyType StateLightReply)
               (StateLight fbsColor 0 fbsLightPowerLevel fbsLabel 0)
 
           print packet
-          pure $ YesResponse (BSL.toChunks bytes)
+          pure $ YesResponse (stream packet)
       (Request (LightMessageType SetWaveformOptionalMessage)) -> do
 
         let
@@ -564,21 +470,13 @@ lightReceiveThread nic ss bulbM
           FakeBulbState {..} <- atomically $ fbState <$> readTVar bulbM
 
           let
-            bytes
-              = Bin.encode packet
             packet
-              = mkTestPacket
-              SingleTagged
-              uniqS
-              nicToTarget
-              NoAckRequired
-              NoResRequired
-              sequ
+              = pp
               (Reply $ LightReplyType StateLightReply)
               (StateLight fbsColor 0 fbsLightPowerLevel fbsLabel 0)
 
           print packet
-          pure $ YesResponse (BSL.toChunks bytes)
+          pure $ YesResponse (stream packet)
       (Request (DeviceMessageType GetUnknown54Message)) -> do
 
         let
@@ -591,16 +489,8 @@ lightReceiveThread nic ss bulbM
           t <- getCurrentLifxUTC
 
           let
-            _bytes
-              = Bin.encode packet
-            packet
-              = mkTestPacket
-              SingleTagged
-              uniqS
-              nicToTarget
-              NoAckRequired
-              NoResRequired
-              sequ
+            _packet
+              = pp
               (Reply $ DeviceReplyType StateUnknown54Reply)
               (StateUnknown54 def (Label "") t)
 
@@ -637,6 +527,15 @@ lightReceiveThread nic ss bulbM
       print @String $ replicate100 '*'
       print $ msg <> show p
       print @String $ replicate100 '*'
+
+    preamble uniqS nicToTarget sequ
+      = mkTestPacket
+      SingleTagged
+      uniqS
+      nicToTarget
+      NoAckRequired
+      NoResRequired
+      sequ
 
 
 data FakeBulb

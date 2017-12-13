@@ -49,6 +49,7 @@ library
                       , data-default
                       , generic-lens
                       , microlens-platform
+                      , lens
   default-language:    Haskell2010
   ghc-options: -Wall -Werror
   if flag(profiling)
@@ -64,6 +65,7 @@ executable the-exe
                      , async
                      , generic-lens
                      , microlens-platform
+                     , lens
   default-language:    Haskell2010
 
 executable the-client
@@ -80,6 +82,7 @@ executable the-client
                      , pretty-simple
                      , generic-lens
                      , microlens-platform
+                     , lens
   default-language:    Haskell2010
 
 executable the-light
@@ -107,6 +110,7 @@ executable the-light
                      , stm
                      , generic-lens
                      , microlens-platform
+                     , lens
   default-language:    Haskell2010
 
 test-suite the-test
@@ -123,6 +127,7 @@ test-suite the-test
                      , pretty-simple
                      , generic-lens
                      , microlens-platform
+                     , lens
   ghc-options:         -threaded
   ghc-options:         -Wall
   default-language:    Haskell2010
