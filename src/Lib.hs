@@ -461,12 +461,12 @@ listCached SharedState {..}
 --                   ui|ui|b|b|ui|ui
 data Frame
   = Frame
-  { fSize :: !Word16le
-  , fOrigin :: !Word8 -- 0
-  , fTagged :: !Tagged
+  { fSize        :: !Word16le
+  , fOrigin      :: !Word8 -- 0
+  , fTagged      :: !Tagged
   , fAddressable :: !Addressable -- 1
-  , fProtocol :: !Word16le -- 1024
-  , fSource :: !UniqueSource
+  , fProtocol    :: !Word16le -- 1024
+  , fSource      :: !UniqueSource
   }
   deriving (Show, Eq, Generic)
 
@@ -491,12 +491,12 @@ instance NFData Frame where
 --                      [6]
 data FrameAddress
   = FrameAddress
-  { faTarget :: !Target
-  , faReserved :: !UnusedMac -- 0
-  , faReserved2 :: !()
+  { faTarget      :: !Target
+  , faReserved    :: !UnusedMac -- 0
+  , faReserved2   :: !()
   , faAckRequired :: !AckRequired
   , faResRequired :: !ResRequired
-  , faSequence :: !Sequence
+  , faSequence    :: !Sequence
   }
   deriving (Show, Eq, Generic)
 
@@ -528,8 +528,8 @@ instance NFData UnusedMac where
 --                   ui|ui|r
 data ProtocolHeader
   = ProtocolHeader
-  { phReserved :: !Word64le
-  , phType :: !Direction
+  { phReserved  :: !Word64le
+  , phType      :: !Direction
   , phReserved2 :: !()
   }
   deriving (Show, Eq, Generic)
@@ -549,10 +549,10 @@ instance NFData ProtocolHeader where
 
 data Packet a
   = Packet
-  { pFrame :: Frame
-  , pFrameAddress :: FrameAddress
-  , pProtocolHeader :: ProtocolHeader
-  , pPayload :: a
+  { pFrame          :: Frame -- ^ Frame must be lazy or we cannot tie the knot to fill in the true packet size
+  , pFrameAddress   :: !FrameAddress
+  , pProtocolHeader :: !ProtocolHeader
+  , pPayload        :: !a
   }
   deriving (Show, Eq)
 
@@ -576,10 +576,10 @@ newtype Kelvin
 --                   ui|ui|ui|ui
 data HSBK
   = HSBK
-  { hsbkHue :: !Hue -- 0-65535
+  { hsbkHue        :: !Hue -- 0-65535
   , hsbkSaturation :: !Saturation -- 0-65535
   , hsbkBrightness :: !Brightness -- 0-65535
-  , hsbkKelvin :: !Kelvin --2500-9000
+  , hsbkKelvin     :: !Kelvin --2500-9000
   }
   deriving (Show, Eq)
 
@@ -637,8 +637,8 @@ instance Binary (Label n) where
     = (mkLabel . TLE.decodeUtf8) <$> BinG.getLazyByteString 32
 
 data Direction
-  = Request MessageType
-  | Reply ReplyType
+  = Request !MessageType
+  | Reply !ReplyType
   deriving (Show, Eq, Generic)
 
 instance NFData Direction where
@@ -647,9 +647,9 @@ instance NFData Direction where
 
 
 data MessageType
-  = DeviceMessageType DeviceMessage
-  | LightMessageType LightMessage
-  | MultiZoneMessageType MultiZoneMessage
+  = DeviceMessageType !DeviceMessage
+  | LightMessageType !LightMessage
+  | MultiZoneMessageType !MultiZoneMessage
   deriving (Show, Eq, Generic)
 
 instance NFData MessageType where
@@ -658,9 +658,9 @@ instance NFData MessageType where
 
 
 data ReplyType
-  = DeviceReplyType DeviceReply
-  | LightReplyType LightReply
-  | MultiZoneReplyType MultiZoneReply
+  = DeviceReplyType !DeviceReply
+  | LightReplyType !LightReply
+  | MultiZoneReplyType !MultiZoneReply
   deriving (Show, Eq, Generic)
 
 instance NFData ReplyType where
@@ -1145,9 +1145,9 @@ getCurrentLifxUTC
 
 data StateLocation
   = StateLocation
-  { stlLocation :: LocationId
-  , stlLabel :: Label "location"
-  , stlUpdatedAt :: LifxUTC
+  { stlLocation  :: !LocationId
+  , stlLabel     :: !(Label "location")
+  , stlUpdatedAt :: !LifxUTC
   }
   deriving Show
 
@@ -1226,8 +1226,8 @@ instance WithSize GetLightPower where
 
 data SetLightPower
   = SetLightPower
-  { selpLevel :: LightPower
-  , selpDuration :: Word32le --ms
+  { selpLevel    :: !LightPower
+  , selpDuration :: !Word32le --ms
   }
   deriving Show
 
@@ -1254,13 +1254,13 @@ instance WithSize SetLightPower where
 
 data SetWaveform
   = SetWaveform
-  { sewReserved :: Word8
-  , sewTransient :: Word8  -- 8-bit integer as 0 or 1	Color does not persist.
-  , sewColor :: HSBK  --Hsbk	Light end color.
-  , sewPeriod :: Word32le  --unsigned 32-bit integer	Duration of a cycle in milliseconds.
-  , sewCycles :: Float32le -- 32-bit float	Number of cycles.
-  , sewSkewRatio :: Int16le  --signed 16-bit integer	Waveform Skew, [-32768, 32767] scaled to [0, 1].
-  , sewWaveform :: Word8  --unsigned 8-bit integer	Waveform to use for transition.
+  { sewReserved  :: !Word8
+  , sewTransient :: !Word8  -- 8-bit integer as 0 or 1	Color does not persist.
+  , sewColor     :: !HSBK  --Hsbk	Light end color.
+  , sewPeriod    :: !Word32le  --unsigned 32-bit integer	Duration of a cycle in milliseconds.
+  , sewCycles    :: !Float32le -- 32-bit float	Number of cycles.
+  , sewSkewRatio :: !Int16le  --signed 16-bit integer	Waveform Skew, [-32768, 32767] scaled to [0, 1].
+  , sewWaveform  :: !Word8  --unsigned 8-bit integer	Waveform to use for transition.
   }
   deriving Show
 
@@ -1298,17 +1298,17 @@ instance WithSize SetWaveform where
 
 data SetWaveformOptional
   = SetWaveformOptional
-  { sewoReserved :: Word8
-  , sewoTransient :: Word8  -- 8-bit integer as 0 or 1	Color does not persist.
-  , sewoColor :: HSBK  --Hsbk	Light end color.
-  , sewoPeriod :: Word32le  --unsigned 32-bit integer	Duration of a cycle in milliseconds.
-  , sewoCycles :: Float32le -- 32-bit float	Number of cycles.
-  , sewoSkewRatio :: Int16le  --signed 16-bit integer	Waveform Skew, [-32768, 32767] scaled to [0, 1].
-  , sewoWaveform :: Word8  --unsigned 8-bit integer	Waveform to use for transition.
-  , sewoSetHue :: Word8  -- 8-bit integer as 0 or 1
-  , sewoSetSaturation :: Word8  -- 8-bit integer as 0 or 1
-  , sewoSetBrightness :: Word8  -- 8-bit integer as 0 or 1
-  , sewoSetKelvin :: Word8  -- 8-bit integer as 0 or 1
+  { sewoReserved      :: !Word8
+  , sewoTransient     :: !Word8  -- 8-bit integer as 0 or 1	Color does not persist.
+  , sewoColor         :: !HSBK  --Hsbk	Light end color.
+  , sewoPeriod        :: !Word32le  --unsigned 32-bit integer	Duration of a cycle in milliseconds.
+  , sewoCycles        :: !Float32le -- 32-bit float	Number of cycles.
+  , sewoSkewRatio     :: !Int16le  --signed 16-bit integer	Waveform Skew, [-32768, 32767] scaled to [0, 1].
+  , sewoWaveform      :: !Word8  --unsigned 8-bit integer	Waveform to use for transition.
+  , sewoSetHue        :: !Word8  -- 8-bit integer as 0 or 1
+  , sewoSetSaturation :: !Word8  -- 8-bit integer as 0 or 1
+  , sewoSetBrightness :: !Word8  -- 8-bit integer as 0 or 1
+  , sewoSetKelvin     :: !Word8  -- 8-bit integer as 0 or 1
   }
   deriving Show
 
@@ -1368,11 +1368,11 @@ instance MessageId GetLight where
 
 data StateLight
   = StateLight
-  { stliColor :: HSBK
-  , stliReserved :: Int16
-  , stliPower :: LightPower
-  , stliLabel :: Label "name"
-  , stliReserved2 :: Word64le
+  { stliColor     :: !HSBK
+  , stliReserved  :: !Int16
+  , stliPower     :: !LightPower
+  , stliLabel     :: !(Label "name")
+  , stliReserved2 :: !Word64le
   }
   deriving Show
 
@@ -1450,9 +1450,9 @@ instance WithSize StateInfrared where
   size
     = const 2
 
-data SetInfrared
+newtype SetInfrared
   = SetInfrared
-  { seiBrightness :: !Word16le }
+  { seiBrightness :: Word16le }
   deriving Show
 
 instance Binary SetInfrared where
@@ -1633,9 +1633,9 @@ instance Binary ProductId where
 
 data StateVersion
   = StateVersion
-  { stvVendor :: VendorId
-  , stvProduct :: ProductId
-  , stvVersion :: HardwareVersion
+  { stvVendor  :: !VendorId
+  , stvProduct :: !ProductId
+  , stvVersion :: !HardwareVersion
   }
   deriving Show
 
@@ -1694,10 +1694,10 @@ instance WithSize GetHostInfo where
 
 data StateHostInfo
   = StateHostInfo
-  { sthiSignal :: Float32le
-  , sthiTx :: Word32le
-  , sthiRx :: Word32le
-  , sthiReserved :: Int16le
+  { sthiSignal   :: !Float32le
+  , sthiTx       :: !Word32le
+  , sthiRx       :: !Word32le
+  , sthiReserved :: !Int16le
   }
   deriving Show
 
@@ -1742,9 +1742,9 @@ instance WithSize GetHostFirmware where
 
 data StateHostFirmware
  = StateHostFirmware
-  { sthfBuild :: Word64le
-  , sthfReserved :: Word64le
-  , sthfVersion :: Word32le
+  { sthfBuild    :: !Word64le
+  , sthfReserved :: !Word64le
+  , sthfVersion  :: !Word32le
   }
   deriving Show
 
@@ -1788,10 +1788,10 @@ instance WithSize GetWifiInfo where
 
 data StateWifiInfo
   = StateWifiInfo
-  { stwiSignal :: Float32le
-  , stwiTx :: Word32le
-  , stwiRx :: Word32le
-  , stwiReserved :: Int16le
+  { stwiSignal   :: !Float32le
+  , stwiTx       :: !Word32le
+  , stwiRx       :: !Word32le
+  , stwiReserved :: !Int16le
   }
   deriving Show
 
@@ -1835,9 +1835,9 @@ instance WithSize GetWifiFirmware where
 
 data StateWifiFirmware
   = StateWifiFirmware
-  { stwfBuild :: Word64le -- ns since epoch
-  , stwfReserved :: Word64le
-  , stwfVersion :: Word32le
+  { stwfBuild    :: !Word64le -- ns since epoch
+  , stwfReserved :: !Word64le
+  , stwfVersion  :: !Word32le
   } deriving Show
 
 instance Binary StateWifiFirmware where
@@ -1873,9 +1873,9 @@ instance WithSize GetInfo where
 
 data StateInfo
   = StateInfo
-  { stiTime :: Word64le
-  , stiUptime :: Word64le
-  , stiDowntime :: Word64le
+  { stiTime     :: !Word64le
+  , stiUptime   :: !Word64le
+  , stiDowntime :: !Word64le
   }
   deriving Show
 
@@ -1926,9 +1926,9 @@ instance Default Unknown54Id where
 
 data StateUnknown54
   = StateUnknown54
-  { stu54Unknown54Id :: Unknown54Id
-  , stu54Label :: Label "unknown54"
-  , stu54UpdatedAt :: LifxUTC
+  { stu54Unknown54Id :: !Unknown54Id
+  , stu54Label       :: !(Label "unknown54")
+  , stu54UpdatedAt   :: !LifxUTC
   }
   deriving Show
 
@@ -1968,9 +1968,9 @@ instance MessageId GetGroup where
 
 data StateGroup
   = StateGroup
-  { stgGroup :: GroupId
-  , stgLabel :: Label "group"
-  , stgUpdatedAt :: LifxUTC
+  { stgGroup     :: !GroupId
+  , stgLabel     :: !(Label "group")
+  , stgUpdatedAt :: !LifxUTC
   }
   deriving Show
 
@@ -1993,9 +1993,9 @@ instance WithSize GetGroup where
   size
     = const 0
 
-data SetPower
+newtype SetPower
   = SetPower
-  { spLevel :: !Word16le }
+  { spLevel :: Word16le }
   deriving Show
 
 instance Binary SetPower where
@@ -2004,9 +2004,9 @@ instance Binary SetPower where
   get
     = SetPower <$> Bin.get
 
-data StatePower
+newtype StatePower
   = StatePower
-  { stpLevel :: !Word16le }
+  { stpLevel :: Word16le }
   deriving Show
 
 instance Binary StatePower where
@@ -2015,9 +2015,9 @@ instance Binary StatePower where
   get
     = StatePower <$> Bin.get
 
-data SetLabel
+newtype SetLabel
   = SetLabel
-  { selLabel :: !(Label "name") }
+  { selLabel :: (Label "name") }
   deriving Show
 
 instance Binary SetLabel where
@@ -2032,10 +2032,10 @@ instance WithSize SetLabel where
 
 data State
   = State
-  { sColor :: !HSBK
-  , sReserved :: !Int16le
-  , sPower :: !Word16le
-  , sLabel :: !(Label "name")
+  { sColor     :: !HSBK
+  , sReserved  :: !Int16le
+  , sPower     :: !Word16le
+  , sLabel     :: !(Label "name")
   , sReserved2 :: !Word64le
   }
   deriving Show
@@ -2075,7 +2075,7 @@ instance WithSize Acknowledgement where
 data SetColor
   = SetColor
   { secReserved :: !()
-  , secColor :: !HSBK
+  , secColor    :: !HSBK
   , secDuration :: !Word32le -- ms
   }
   deriving Show
@@ -2111,7 +2111,7 @@ data GetService
 data StateService
   = StateService
   { ssService :: !Word8
-  , ssPort :: !Word32le
+  , ssPort    :: !Word32le
   }
   deriving Show
 
@@ -2485,8 +2485,8 @@ instance Binary Header where
 --                   [6]
 data Header
   = Header
-  { hFrame :: !Frame
-  , hFrameAddress :: !FrameAddress
+  { hFrame          :: !Frame
+  , hFrameAddress   :: !FrameAddress
   , hProtocolHeader :: !ProtocolHeader
   }
   deriving (Show, Generic)
@@ -2515,7 +2515,7 @@ broadcast sock bcast a
 data CallbackWrap
   = forall a. (Show a, Binary a, WithSize a) =>
   CallbackWrap
-  { runDecode :: !(Header -> BSL.ByteString -> Except PayloadDecodeError (Packet a))
+  { runDecode   :: !(Header -> BSL.ByteString -> Except PayloadDecodeError (Packet a))
   , runCallback :: !(Callback a)
   }
 
@@ -2528,18 +2528,18 @@ instance Show CallbackWrap where
 
 data AppState
   = AppState
-  { asSharedState :: !SharedState
-  , asReceiveThread :: !(Async ())
+  { asSharedState     :: !SharedState
+  , asReceiveThread   :: !(Async ())
   , asDiscoveryThread :: !(Async ())
   }
 
 data SharedState
   = SharedState
   { ssReplyCallbacks :: !(TArray Word8 CallbackWrap)
-  , ssDevices :: !(TVar (HM.HashMap DeviceId Light))
-  , ssSocket :: !Socket
-  , ssNextSeq :: !(IO Sequence)
-  , ssUniqueSource :: !UniqueSource
+  , ssDevices        :: !(TVar (HM.HashMap DeviceId Light))
+  , ssSocket         :: !Socket
+  , ssNextSeq        :: !(IO Sequence)
+  , ssUniqueSource   :: !UniqueSource
   }
 
 data Light
@@ -2624,29 +2624,29 @@ instance Show DeviceSocketAddress where
 
 data Device
   = Device
-  { dAddr :: !DeviceSocketAddress
+  { dAddr     :: !DeviceSocketAddress
   , dDeviceId :: !DeviceId
   }
   deriving (Show, Eq)
 
 data HeaderDecodeError
   = NotAHeader
-  { hdeError :: !String
-  , hdeOrig :: !BSL.ByteString
+  { hdeError     :: !String
+  , hdeOrig      :: !BSL.ByteString
   , hdeRemaining :: !BSL.ByteString
-  , hdeOffset :: !BinG.ByteOffset
+  , hdeOffset    :: !BinG.ByteOffset
   }
   | ImproperSourceInHeader
-  { hdeHeader :: !Header
-  , hdeOrig :: !BSL.ByteString
+  { hdeHeader    :: !Header
+  , hdeOrig      :: !BSL.ByteString
   , hdeRemaining :: !BSL.ByteString
-  , hdeOffset :: !BinG.ByteOffset
+  , hdeOffset    :: !BinG.ByteOffset
   }
   | ImproperSizeInHeader
-  { hdeHeader :: !Header
-  , hdeOrig :: !BSL.ByteString
+  { hdeHeader    :: !Header
+  , hdeOrig      :: !BSL.ByteString
   , hdeRemaining :: !BSL.ByteString
-  , hdeOffset :: !BinG.ByteOffset
+  , hdeOffset    :: !BinG.ByteOffset
   }
   deriving (Show, Generic)
 
@@ -2658,11 +2658,11 @@ instance NFData HeaderDecodeError where
 
 data PayloadDecodeError
   = PayloadDecodeFailed
-  { pdeHeader :: !Header
-  , pdeRemaining :: !BSL.ByteString
+  { pdeHeader             :: !Header
+  , pdeRemaining          :: !BSL.ByteString
   , pdeRemainingAfterFail :: !BSL.ByteString
-  , pdeOffsetAfterFail :: !BinG.ByteOffset
-  , pdeError :: !String
+  , pdeOffsetAfterFail    :: !BinG.ByteOffset
+  , pdeError              :: !String
   }
   deriving Show
 

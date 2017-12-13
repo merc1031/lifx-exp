@@ -62,39 +62,6 @@ import qualified  Data.List                   as  L
 import qualified  Data.Time.Clock.POSIX       as  POSIX
 import qualified  Network.Info                as  NI
 
-data MorphedError
-  = MorphedPayloadError PayloadDecodeError
-  | UnknownPacketError String
-  deriving Show
-
-data ShouldRespond
-  = YesResponse [BS.ByteString]
-  | NoResponse
-  deriving Show
-
-shouldRespond
-  :: Header
-  -> [BS.ByteString]
-  -> ShouldRespond
-shouldRespond (hFrameAddress -> faResRequired -> ResRequired) bsl
-  = YesResponse bsl
-shouldRespond _ _
-  = NoResponse
-
-
-spaces100
-  :: IsString a
-  => a
-spaces100
-  = replicate100 ' '
-
-replicate100
-  :: IsString a
-  => Char
-  -> a
-replicate100 c
-  = fromString $ replicate 100 c
-
 lightReceiveThread
   :: NI.NetworkInterface
   -> Socket
@@ -603,6 +570,39 @@ lightReceiveThread nic ss bulbM
 
 
 
+data MorphedError
+  = MorphedPayloadError !PayloadDecodeError
+  | UnknownPacketError !String
+  deriving Show
+
+data ShouldRespond
+  = YesResponse ![BS.ByteString]
+  | NoResponse
+  deriving Show
+
+shouldRespond
+  :: Header
+  -> [BS.ByteString]
+  -> ShouldRespond
+shouldRespond (hFrameAddress -> faResRequired -> ResRequired) bsl
+  = YesResponse bsl
+shouldRespond _ _
+  = NoResponse
+
+
+spaces100
+  :: IsString a
+  => a
+spaces100
+  = replicate100 ' '
+
+replicate100
+  :: IsString a
+  => Char
+  -> a
+replicate100 c
+  = fromString $ replicate 100 c
+
 {-
 
 variadicFunction :: VariadicReturnClass r => RequiredArgs -> r
@@ -683,8 +683,8 @@ instance Default FakeBulb where
 
 data FakeBulbFirmware
   = FakeBulbFirmware
-  { fbfBuild :: Word64le
-  , fbfVersion :: Word32le
+  { fbfBuild   :: !Word64le
+  , fbfVersion :: !Word32le
   }
   deriving (Show, Generic)
 
@@ -699,9 +699,9 @@ instance Default FakeBulbFirmware where
 
 data FakeBulbWifiInfo
   = FakeBulbWifiInfo
-  { fbwiSignal :: Float32le
-  , fbwiTx :: Word32le
-  , fbwiRx :: Word32le
+  { fbwiSignal :: !Float32le
+  , fbwiTx     :: !Word32le
+  , fbwiRx     :: !Word32le
   }
   deriving (Show, Generic)
 
@@ -715,8 +715,8 @@ instance Default FakeBulbWifiInfo where
 
 data FakeBulbWifiFirmware
   = FakeBulbWifiFirmware
-  { fbwfBuild :: Word64le
-  , fbwfVersion :: Word32le
+  { fbwfBuild   :: !Word64le
+  , fbwfVersion :: !Word32le
   }
   deriving (Show, Generic)
 
@@ -729,9 +729,9 @@ instance Default FakeBulbWifiFirmware where
 
 data FakeBulbVersion
   = FakeBulbVersion
-  { fbvVendor :: VendorId
-  , fbvProduct :: ProductId
-  , fbvVersion :: Word32le
+  { fbvVendor  :: !VendorId
+  , fbvProduct :: !ProductId
+  , fbvVersion :: !Word32le
   }
   deriving (Show, Generic)
 
@@ -745,8 +745,8 @@ instance Default FakeBulbVersion where
 
 data FakeBulbLocation
   = FakeBulbLocation
-  { fblLocationId :: LocationId
-  , fblLabel :: Label "location"
+  { fblLocationId :: !LocationId
+  , fblLabel      :: !(Label "location")
   }
   deriving (Show, Generic)
 
@@ -760,8 +760,8 @@ instance Default FakeBulbLocation where
 
 data FakeBulbGroup
   = FakeBulbGroup
-  { fbgGroupId :: GroupId
-  , fbgLabel :: Label "group"
+  { fbgGroupId :: !GroupId
+  , fbgLabel   :: !(Label "group")
   }
   deriving (Show, Generic)
 
@@ -775,9 +775,9 @@ instance Default FakeBulbGroup where
 
 data FakeBulbState
   = FakeBulbState
-  { fbsColor :: HSBK
-  , fbsLightPowerLevel :: LightPower
-  , fbsInfraredBrightness :: Word16le
+  { fbsColor              :: !HSBK
+  , fbsLightPowerLevel    :: !LightPower
+  , fbsInfraredBrightness :: !Word16le
   }
   deriving (Show, Generic)
 
