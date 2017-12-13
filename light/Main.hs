@@ -10,48 +10,51 @@
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE ViewPatterns #-}
 {-# OPTIONS_GHC -fno-warn-partial-type-signatures #-}
+{-# OPTIONS_GHC -fno-warn-unused-imports #-}
 module Main where
 
-import Lib
-import qualified Data.Binary as Bin
-import qualified Data.List as L
-import Control.Monad
+import            Control.Monad               ( void )
 import            Control.Monad.Except
-import Control.Concurrent
-import Control.Concurrent.Async
-import Control.Concurrent.STM
-import Control.Exception
-import Data.Default
-import Data.Word
 import            Data.Function
-import            Lens.Micro.Platform
 import            Data.Generics.Product
 import            Data.Generics.Sum
 import            GHC.Generics
-import qualified Data.Time.Clock.POSIX as POSIX
-import Options.Applicative
-import Data.Semigroup ((<>))
-import Network.Info (getNetworkInterfaces)
-import qualified Network.Info as NI
-import Text.Pretty.Simple
-import            Network.Socket                ( Socket (..)
-                                                , SockAddr (..)
-                                                , tupleToHostAddress
-                                                , hostAddressToTuple
-                                                , SocketOption (..)
-                                                , setSocketOption
-                                                , isSupportedSocketOption
-                                                , bind
-                                                , defaultProtocol
-                                                , aNY_PORT
-                                                , socket
-                                                , Family(AF_INET)
-                                                , SocketType(Datagram)
-                                                , PortNumber
-                                                )
-import Network.Socket.ByteString
-import qualified Data.ByteString as BS
-import qualified Data.ByteString.Lazy as BSL
+import            Lens.Micro.Platform
+import            Control.Concurrent
+import            Control.Concurrent.Async
+import            Control.Concurrent.STM
+import            Control.Exception
+import            Control.Monad
+import            Data.Default
+import            Data.Semigroup              ( (<>) )
+import            Data.String                 ( IsString (..) )
+import            Data.Word
+import            Lib
+import            Network.Info                ( getNetworkInterfaces )
+import            Network.Socket              ( Socket (..)
+                                              , SockAddr (..)
+                                              , tupleToHostAddress
+                                              , hostAddressToTuple
+                                              , SocketOption (..)
+                                              , setSocketOption
+                                              , isSupportedSocketOption
+                                              , bind
+                                              , defaultProtocol
+                                              , aNY_PORT
+                                              , socket
+                                              , Family(AF_INET)
+                                              , SocketType(Datagram)
+                                              , PortNumber
+                                              )
+import            Network.Socket.ByteString
+import            Options.Applicative
+import            Text.Pretty.Simple
+import qualified  Data.Binary                 as  Bin
+import qualified  Data.ByteString             as  BS
+import qualified  Data.ByteString.Lazy        as  BSL
+import qualified  Data.List                   as  L
+import qualified  Data.Time.Clock.POSIX       as  POSIX
+import qualified  Network.Info                as  NI
 
 data MorphedError
   = MorphedPayloadError PayloadDecodeError
@@ -67,8 +70,24 @@ shouldRespond
   :: Header
   -> [BS.ByteString]
   -> ShouldRespond
-shouldRespond (hFrameAddress -> faResRequired -> ResRequired) bsl = YesResponse bsl
-shouldRespond _ _ = NoResponse
+shouldRespond (hFrameAddress -> faResRequired -> ResRequired) bsl
+  = YesResponse bsl
+shouldRespond _ _
+  = NoResponse
+
+
+spaces100
+  :: IsString a
+  => a
+spaces100
+  = replicate100 ' '
+
+replicate100
+  :: IsString a
+  => Char
+  -> a
+replicate100 c
+  = fromString $ replicate 100 c
 
 lightReceiveThread
   :: NI.NetworkInterface
@@ -77,32 +96,52 @@ lightReceiveThread
   -> IO (Async ())
 lightReceiveThread nic ss bulbM
   = async $ forever $ do
-  print "About to recv"
-  print "                                                                                                    "
-  print "                                                                                                    "
-  print "                                                                                                    "
-  print "                                                                                                    "
+  print @String "About to recv"
+
+  replicateM_ 4 $ print @String spaces100
   (!bs, sa) <- recvFrom ss 1500
+
   let
-    bsl = BSL.fromStrict bs
-    headerE = runExcept $ decodeHeader Nothing bsl
+    bsl
+      = BSL.fromStrict bs
+    headerE
+      = runExcept
+      $ decodeHeader Nothing bsl
 
   incrRx bsl
 
-  encoded <- forM headerE $ \(header, rest) -> do
+  encoded <- forM headerE $ \(decodedHeader, rest) -> do
+
     let
-      sequ = faSequence $ hFrameAddress header
-      ackR = faAckRequired $ hFrameAddress header
-      resR = faResRequired $ hFrameAddress header
-      uniqS = fSource $ hFrame header
-      msgT = phType $ hProtocolHeader header
-      nicToTarget = case NI.mac nic of
-        NI.MAC b1 b2 b3 b4 b5 b6 -> Target $ Mac $ (0xd0, 0x74, 0x8f, 0x86, 0xbf, 0xaf)
+      sequ
+        = faSequence
+        $ hFrameAddress decodedHeader
+      ackR
+        = faAckRequired
+        $ hFrameAddress decodedHeader
+      resR
+        = faResRequired
+        $ hFrameAddress decodedHeader
+      uniqS
+        = fSource
+        $ hFrame decodedHeader
+      msgT
+        = phType
+        $ hProtocolHeader decodedHeader
+      nicToTarget
+        = case NI.mac nic of
+        NI.MAC _b1 _b2 _b3 _b4 _b5 _b6 ->
+          Target
+            $ Mac
+            $ (0xd0, 0x74, 0x8f, 0x86, 0xbf, 0xaf)
 
     when (ackR == AckRequired) $ do
+
       let
-        bytes = Bin.encode packet
-        packet = mkTestPacket
+        bytes
+          = Bin.encode packet
+        packet
+          = mkTestPacket
           SingleTagged
           uniqS
           nicToTarget
@@ -111,20 +150,33 @@ lightReceiveThread nic ss bulbM
           sequ
           (Reply $ DeviceReplyType AcknowledgementReply)
           (Acknowledgement)
-        msg = BSL.toChunks bytes
+        msg
+          = BSL.toChunks bytes
 
       sendManyTo ss msg sa
       incrTx msg
 
-    print $ "Message " <> show msgT <> " " <> show ackR <> " " <> show resR
+    print
+      $ "Message " <> show msgT <> " "
+      <> show ackR <> " "
+      <> show resR
+
     case msgT of
       (Request (DeviceMessageType GetServiceMessage)) -> do
+
         let
-          payloadE = runExcept $ withExcept MorphedPayloadError $ decodePacket @GetService header rest
-        forM payloadE $ \payload -> do
+          payloadE
+            = runExcept
+            $ withExcept MorphedPayloadError
+            $ decodePacket @GetService decodedHeader rest
+
+        forM payloadE $ \_payload -> do
+
           let
-            bytes = Bin.encode packet
-            packet = mkTestPacket
+            bytes
+              = Bin.encode packet
+            packet
+              = mkTestPacket
               SingleTagged
               uniqS
               nicToTarget
@@ -136,13 +188,21 @@ lightReceiveThread nic ss bulbM
 
           pure $ YesResponse (BSL.toChunks bytes)
       (Request (DeviceMessageType GetHostFirmwareMessage)) -> do
+
         let
-          payloadE = runExcept $ withExcept MorphedPayloadError $ decodePacket @GetHostFirmware header rest
-        forM payloadE $ \payload -> do
+          payloadE
+            = runExcept
+            $ withExcept MorphedPayloadError
+            $ decodePacket @GetHostFirmware decodedHeader rest
+
+        forM payloadE $ \_payload -> do
           FakeBulbFirmware {..} <- atomically $ fbFirmware <$> readTVar bulbM
+
           let
-            bytes = Bin.encode packet
-            packet = mkTestPacket
+            bytes
+              = Bin.encode packet
+            packet
+              = mkTestPacket
               SingleTagged
               uniqS
               nicToTarget
@@ -154,13 +214,21 @@ lightReceiveThread nic ss bulbM
 
           pure $ YesResponse (BSL.toChunks bytes)
       (Request (DeviceMessageType GetWifiFirmwareMessage)) -> do
+
         let
-          payloadE = runExcept $ withExcept MorphedPayloadError $ decodePacket @GetWifiFirmware header rest
-        forM payloadE $ \payload -> do
+          payloadE
+            = runExcept
+            $ withExcept MorphedPayloadError
+            $ decodePacket @GetWifiFirmware decodedHeader rest
+
+        forM payloadE $ \_payload -> do
           FakeBulbWifiFirmware {..} <- atomically $ fbWifiFirmware <$> readTVar bulbM
+
           let
-            bytes = Bin.encode packet
-            packet = mkTestPacket
+            bytes
+              = Bin.encode packet
+            packet
+              = mkTestPacket
               SingleTagged
               uniqS
               nicToTarget
@@ -172,13 +240,21 @@ lightReceiveThread nic ss bulbM
 
           pure $ YesResponse (BSL.toChunks bytes)
       (Request (DeviceMessageType GetWifiInfoMessage)) -> do
+
         let
-          payloadE = runExcept $ withExcept MorphedPayloadError $ decodePacket @GetWifiInfo header rest
-        forM payloadE $ \payload -> do
+          payloadE
+            = runExcept
+            $ withExcept MorphedPayloadError
+            $ decodePacket @GetWifiInfo decodedHeader rest
+
+        forM payloadE $ \_payload -> do
           FakeBulbWifiInfo {..} <- atomically $ fbWifiInfo <$> readTVar bulbM
+
           let
-            bytes = Bin.encode packet
-            packet = mkTestPacket
+            bytes
+              = Bin.encode packet
+            packet
+              = mkTestPacket
               SingleTagged
               uniqS
               nicToTarget
@@ -190,13 +266,21 @@ lightReceiveThread nic ss bulbM
 
           pure $ YesResponse (BSL.toChunks bytes)
       (Request (LightMessageType GetLightMessage)) -> do
+
         let
-          payloadE = runExcept $ withExcept MorphedPayloadError $ decodePacket @GetLight header rest
-        forM payloadE $ \payload -> do
+          payloadE
+            = runExcept
+            $ withExcept MorphedPayloadError
+            $ decodePacket @GetLight decodedHeader rest
+
+        forM payloadE $ \_payload -> do
           FakeBulbState {..} <- atomically $ fbState <$> readTVar bulbM
+
           let
-            bytes = Bin.encode packet
-            packet = mkTestPacket
+            bytes
+              = Bin.encode packet
+            packet
+              = mkTestPacket
               SingleTagged
               uniqS
               nicToTarget
@@ -206,16 +290,23 @@ lightReceiveThread nic ss bulbM
               (Reply $ LightReplyType StateLightReply)
               (StateLight fbsColor 0 fbsLightPowerLevel fbsLabel 0)
 
-          print packet
           pure $ YesResponse (BSL.toChunks bytes)
       (Request (DeviceMessageType GetVersionMessage)) -> do
+
         let
-          payloadE = runExcept $ withExcept MorphedPayloadError $ decodePacket @GetVersion header rest
-        forM payloadE $ \payload -> do
+          payloadE
+            = runExcept
+            $ withExcept MorphedPayloadError
+            $ decodePacket @GetVersion decodedHeader rest
+
+        forM payloadE $ \_payload -> do
           FakeBulbVersion {..} <- atomically $ fbVersion <$> readTVar bulbM
+
           let
-            bytes = Bin.encode packet
-            packet = mkTestPacket
+            bytes
+              = Bin.encode packet
+            packet
+              = mkTestPacket
               SingleTagged
               uniqS
               nicToTarget
@@ -227,14 +318,22 @@ lightReceiveThread nic ss bulbM
 
           pure $ YesResponse (BSL.toChunks bytes)
       (Request (DeviceMessageType GetLocationMessage)) -> do
+
         let
-          payloadE = runExcept $ withExcept MorphedPayloadError $ decodePacket @GetLocation header rest
-        forM payloadE $ \payload -> do
+          payloadE
+            = runExcept
+            $ withExcept MorphedPayloadError
+            $ decodePacket @GetLocation decodedHeader rest
+
+        forM payloadE $ \_payload -> do
           t <- getCurrentLifxUTC
           FakeBulbLocation {..} <- atomically $ fbLocation <$> readTVar bulbM
+
           let
-            bytes = Bin.encode packet
-            packet = mkTestPacket
+            bytes
+              = Bin.encode packet
+            packet
+              = mkTestPacket
               SingleTagged
               uniqS
               nicToTarget
@@ -246,14 +345,22 @@ lightReceiveThread nic ss bulbM
 
           pure $ YesResponse (BSL.toChunks bytes)
       (Request (DeviceMessageType GetGroupMessage)) -> do
+
         let
-          payloadE = runExcept $ withExcept MorphedPayloadError $ decodePacket @GetGroup header rest
-        forM payloadE $ \payload -> do
+          payloadE
+            = runExcept
+            $ withExcept MorphedPayloadError
+            $ decodePacket @GetGroup decodedHeader rest
+
+        forM payloadE $ \_payload -> do
           t <- getCurrentLifxUTC
           FakeBulbGroup {..} <- atomically $ fbGroup <$> readTVar bulbM
+
           let
-            bytes = Bin.encode packet
-            packet = mkTestPacket
+            bytes
+              = Bin.encode packet
+            packet
+              = mkTestPacket
               SingleTagged
               uniqS
               nicToTarget
@@ -265,19 +372,26 @@ lightReceiveThread nic ss bulbM
 
           pure $ YesResponse (BSL.toChunks bytes)
       (Request (DeviceMessageType SetLabelMessage)) -> do
+
         let
-          payloadE = runExcept $ withExcept MorphedPayloadError $ decodePacket @SetLabel header rest
+          payloadE
+            = runExcept
+            $ withExcept MorphedPayloadError
+            $ decodePacket @SetLabel decodedHeader rest
+
         forM payloadE $ \Packet { pPayload } -> do
           print $ "Told to set label to " <> show pPayload
-          t <- getCurrentLifxUTC
+
           label <- atomically $ do
             modifyTVar' bulbM (& typed @FakeBulbState . typed @(Label "name") .~ (selLabel pPayload))
             fbsLabel . fbState <$> readTVar bulbM
 
 
           let
-            bytes = Bin.encode packet
-            packet = mkTestPacket
+            bytes
+              = Bin.encode packet
+            packet
+              = mkTestPacket
               SingleTagged
               uniqS
               nicToTarget
@@ -287,21 +401,28 @@ lightReceiveThread nic ss bulbM
               (Reply $ DeviceReplyType StateLabelReply)
               (StateLabel label)
 
-          pure $ shouldRespond header (BSL.toChunks bytes)
+          pure $ shouldRespond decodedHeader (BSL.toChunks bytes)
       (Request (LightMessageType SetColorMessage)) -> do
+
         let
-          payloadE = runExcept $ withExcept MorphedPayloadError $ decodePacket @SetColor header rest
+          payloadE
+            = runExcept
+            $ withExcept MorphedPayloadError
+            $ decodePacket @SetColor decodedHeader rest
+
         forM payloadE $ \p@(Packet { pPayload = SetColor {..} }) -> do
-          print $ "********************************************************************************************************"
-          print $ "Set Color Payload " <> show (pPayload p)
-          print $ "********************************************************************************************************"
+          printBanner "Set Color Payload " (pPayload p)
+
           -- Should really spion off a thread to handle the duration aspect of chaning color...
           FakeBulbState {..} <- atomically $ do
             modifyTVar' bulbM (& typed @FakeBulbState . typed @HSBK .~ secColor)
             fbState <$> readTVar bulbM
+
           let
-            bytes = Bin.encode packet
-            packet = mkTestPacket
+            bytes
+              = Bin.encode packet
+            packet
+              = mkTestPacket
               SingleTagged
               uniqS
               nicToTarget
@@ -311,11 +432,16 @@ lightReceiveThread nic ss bulbM
               (Reply $ LightReplyType StateLightReply)
               (StateLight fbsColor 0 fbsLightPowerLevel fbsLabel 0)
 
-          pure $ shouldRespond header (BSL.toChunks bytes)
+          pure $ shouldRespond decodedHeader (BSL.toChunks bytes)
 --          pure $ YesResponse (BSL.toChunks bytes)
       (Request (LightMessageType SetLightPowerMessage)) -> do
+
         let
-          payloadE = runExcept $ withExcept MorphedPayloadError $ decodePacket @SetLightPower header rest
+          payloadE
+            = runExcept
+            $ withExcept MorphedPayloadError
+            $ decodePacket @SetLightPower decodedHeader rest
+
         forM payloadE $ \Packet { pPayload = SetLightPower {..} } -> do
 
           -- If there is a previous power thread kill it (TODO maybe use a channel and a persistent thread)
@@ -328,25 +454,35 @@ lightReceiveThread nic ss bulbM
           LightPower lightPowerLevel <- atomically $ fbsLightPowerLevel . fbState <$> readTVar bulbM
           start <- POSIX.getPOSIXTime
 
-          async $ do
+          pThread <- async $ do
+
             let
-              end = floor start + selpDuration
-              loop = do
-                threadDelay $ floor $ 2 * ((1 * 1000000) / fromIntegral maxMessagesPerSecond) -- Only use 1/2 of our message allotment by sleeping 2 times as long
+              end
+                = floor start + selpDuration
+              loop
+                = do
+                threadDelay $ floor @Double $ 2 * ((1 * 1000000) / fromIntegral maxMessagesPerSecond) -- Only use 1/2 of our message allotment by sleeping 2 times as long
                 now <- POSIX.getPOSIXTime
+
                 let
-                  percentage = (now - start) / (fromIntegral end - start)
-                  smear = lightPowerLevel + ((unLightPower selpLevel - lightPowerLevel) * floor percentage)
+                  percentage
+                    = (now - start) / (fromIntegral end - start)
+                  smear
+                    = lightPowerLevel + ((unLightPower selpLevel - lightPowerLevel) * floor percentage)
+
                 atomically $ modifyTVar' bulbM (& typed @FakeBulbState . typed @LightPower .~ LightPower smear)
                 -- start = 10     end = 40      now = 20
                 --         20           80
                 when (floor now < end)
                   loop
             loop
+          atomically $ modifyTVar' powerThreadV (const $ Just pThread)
 
           let
-            bytes = Bin.encode packet
-            packet = mkTestPacket
+            bytes
+              = Bin.encode packet
+            packet
+              = mkTestPacket
               SingleTagged
               uniqS
               nicToTarget
@@ -356,19 +492,25 @@ lightReceiveThread nic ss bulbM
               (Reply $ LightReplyType StateLightPowerReply)
               (StateLightPower $ LightPower lightPowerLevel)
 
-          print packet
-          pure $ shouldRespond header (BSL.toChunks bytes)
+          pure $ shouldRespond decodedHeader (BSL.toChunks bytes)
       (Request (LightMessageType SetInfraredMessage)) -> do
+
         let
-          payloadE = runExcept $ withExcept MorphedPayloadError $ decodePacket @SetInfrared header rest
+          payloadE
+            = runExcept
+            $ withExcept MorphedPayloadError
+            $ decodePacket @SetInfrared decodedHeader rest
+
         forM payloadE $ \Packet { pPayload } -> do
           infraredBrightness <- atomically $ do
             modifyTVar' bulbM (& typed @FakeBulbState . typed @Word16le .~ seiBrightness pPayload)
             fbsInfraredBrightness . fbState <$> readTVar bulbM
 
           let
-            bytes = Bin.encode packet
-            packet = mkTestPacket
+            bytes
+              = Bin.encode packet
+            packet
+              = mkTestPacket
               SingleTagged
               uniqS
               nicToTarget
@@ -378,18 +520,25 @@ lightReceiveThread nic ss bulbM
               (Reply $ LightReplyType StateInfraredReply)
               (StateInfrared infraredBrightness)
 
-          pure $ shouldRespond header (BSL.toChunks bytes)
+          pure $ shouldRespond decodedHeader (BSL.toChunks bytes)
       (Request (LightMessageType SetWaveformMessage)) -> do
+
         let
-          payloadE = runExcept $ withExcept MorphedPayloadError $ decodePacket @SetWaveform header rest
+          payloadE
+            = runExcept
+            $ withExcept MorphedPayloadError
+            $ decodePacket @SetWaveform decodedHeader rest
+
         forM payloadE $ \p@(Packet { pPayload = SetWaveform {..} }) -> do
-          print $ "********************************************************************************************************"
-          print $ "Set Waveform Payload " <> show (pPayload p)
-          print $ "********************************************************************************************************"
+          printBanner "Set Waveform Payload " (pPayload p)
+
           FakeBulbState {..} <- atomically $ fbState <$> readTVar bulbM
+
           let
-            bytes = Bin.encode packet
-            packet = mkTestPacket
+            bytes
+              = Bin.encode packet
+            packet
+              = mkTestPacket
               SingleTagged
               uniqS
               nicToTarget
@@ -402,16 +551,23 @@ lightReceiveThread nic ss bulbM
           print packet
           pure $ YesResponse (BSL.toChunks bytes)
       (Request (LightMessageType SetWaveformOptionalMessage)) -> do
+
         let
-          payloadE = runExcept $ withExcept MorphedPayloadError $ decodePacket @SetWaveformOptional header rest
+          payloadE
+            = runExcept
+            $ withExcept MorphedPayloadError
+            $ decodePacket @SetWaveformOptional decodedHeader rest
+
         forM payloadE $ \p@(Packet { pPayload = SetWaveformOptional {..} }) -> do
-          print $ "********************************************************************************************************"
-          print $ "Set Waveform Optional Payload " <> show (pPayload p)
-          print $ "********************************************************************************************************"
+          printBanner "Set Waveform Optional Payload " (pPayload p)
+
           FakeBulbState {..} <- atomically $ fbState <$> readTVar bulbM
+
           let
-            bytes = Bin.encode packet
-            packet = mkTestPacket
+            bytes
+              = Bin.encode packet
+            packet
+              = mkTestPacket
               SingleTagged
               uniqS
               nicToTarget
@@ -424,13 +580,21 @@ lightReceiveThread nic ss bulbM
           print packet
           pure $ YesResponse (BSL.toChunks bytes)
       (Request (DeviceMessageType GetUnknown54Message)) -> do
+
         let
-          payloadE = runExcept $ withExcept MorphedPayloadError $ decodePacket @GetUnknown54 header rest
-        forM payloadE $ \payload -> do
+          payloadE
+            = runExcept
+            $ withExcept MorphedPayloadError
+            $ decodePacket @GetUnknown54 decodedHeader rest
+
+        forM payloadE $ \_payload -> do
           t <- getCurrentLifxUTC
+
           let
-            bytes = Bin.encode packet
-            packet = mkTestPacket
+            _bytes
+              = Bin.encode packet
+            packet
+              = mkTestPacket
               SingleTagged
               uniqS
               nicToTarget
@@ -441,7 +605,8 @@ lightReceiveThread nic ss bulbM
               (StateUnknown54 def (Label "") t)
 
           pure $ NoResponse
-      _ -> (Left $ UnknownPacketError "") <$ (print $ "Header: " <> show header <> " Rest: " <> show rest)
+      _ -> (Left $ UnknownPacketError "")
+        <$ (print $ "Header: " <> show decodedHeader <> " Rest: " <> show rest)
 
 
 
@@ -453,19 +618,25 @@ lightReceiveThread nic ss bulbM
       YesResponse msg -> do
         sendManyTo ss msg sa
         incrTx msg
+
   print =<< (atomically $ readTVar bulbM)
-  print "                                                                                                    "
-  print "                                                                                                    "
-  print "                                                                                                    "
-  print "                                                                                                    "
-  print "                                                                                                    "
+
+  replicateM_ 4 $ print @String spaces100
+
   where
     incrTx (BS.concat -> BS.length -> fromIntegral -> len) = atomically $ modifyTVar'
       bulbM
       (& typed @FakeBulbWifiInfo . field @"fbwiTx" %~ (+ len))
+
     incrRx (BSL.length -> fromIntegral -> len) = atomically $ modifyTVar'
       bulbM
       (& typed @FakeBulbWifiInfo . field @"fbwiRx" %~ (+ len))
+
+    printBanner msg p
+      = do
+      print @String $ replicate100 '*'
+      print $ msg <> show p
+      print @String $ replicate100 '*'
 
 
 data FakeBulb
@@ -526,6 +697,7 @@ data FakeBulbFirmware
 instance Default FakeBulbFirmware where
   def
     = FakeBulbFirmware
+    -- | Got from dump from real lights
     { fbfBuild = 1511412934000000000
     , fbfVersion = 131144
     }
@@ -586,6 +758,7 @@ data FakeBulbLocation
 instance Default FakeBulbLocation where
   def
     = FakeBulbLocation
+    -- | Got from dump from real lights
     { fblLocationId = LocationId $ ByteId16 [191,85,176,70,10,79,235,23,234,91,5,109,79,82,97,227]
     , fblLabel = Label "Home"
     }
@@ -600,6 +773,7 @@ data FakeBulbGroup
 instance Default FakeBulbGroup where
   def
     = FakeBulbGroup
+    -- | Got from dump from real lights
     { fbgGroupId = GroupId $ ByteId16 [47,223,129,99,224,228,225,11,76,216,163,23,127,156,239,247]
     , fbgLabel = Label "Lab"
     }
@@ -650,25 +824,36 @@ fakeBulb t powerThread
   , fbPowerThread = powerThread
   }
 
-main :: IO ()
-main = do
+main
+  :: IO ()
+main
+  = do
   ssSocket <- socket AF_INET Datagram defaultProtocol
+
   let
-    port = 56700
-    addr = SockAddrInet port 0
+    port
+      = 56700
+    addr
+      = SockAddrInet port 0
 
   nics <- getNetworkInterfaces
   let
-    Just eth0 = L.find ((== "eth0") . NI.name) nics
+    Just eth0
+      = L.find ((== "eth0") . NI.name) nics
 
   when (isSupportedSocketOption Broadcast)
     (setSocketOption ssSocket Broadcast 1)
+
   bind ssSocket addr
+
   t <- getCurrentLifxUTC
+
   powerThread <- newTVarIO Nothing
   fakeBulbM <- newTVarIO (fakeBulb t powerThread)
-  asReceiveThread <- lightReceiveThread eth0 ssSocket fakeBulbM
-  print "Thread launched"
 
-  waitCatch asReceiveThread
+  asReceiveThread <- lightReceiveThread eth0 ssSocket fakeBulbM
+
+  print @String "Thread launched"
+
+  void $ waitCatch asReceiveThread
   pure ()

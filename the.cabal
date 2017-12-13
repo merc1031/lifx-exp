@@ -58,6 +58,7 @@ executable the-exe
   hs-source-dirs:      app
   main-is:             Main.hs
   ghc-options:         -threaded
+  ghc-options:         -Wall
   build-depends:       base
                      , the
                      , async
@@ -69,6 +70,7 @@ executable the-client
   hs-source-dirs:      client
   main-is:             Main.hs
   ghc-options:         -threaded
+  ghc-options:         -Wall
   build-depends:       base
                      , the
                      , async
@@ -84,6 +86,7 @@ executable the-light
   hs-source-dirs:      light
   main-is:             Main.hs
   ghc-options:         -threaded
+  ghc-options:         -Wall
   if flag(profiling)
     ghc-options: -fprof-auto -fprof-auto-calls -auto-all -prof -prof-cafs
   build-depends:       base
@@ -121,6 +124,7 @@ test-suite the-test
                      , generic-lens
                      , microlens-platform
   ghc-options:         -threaded
+  ghc-options:         -Wall
   default-language:    Haskell2010
 
 source-repository head
