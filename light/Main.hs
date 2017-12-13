@@ -14,7 +14,9 @@
 {-# OPTIONS_GHC -fno-warn-unused-imports #-}
 module Main where
 
-import            Control.Arrow               ( first )
+import            Control.Arrow               ( first
+                                              , (&&&)
+                                              )
 import            Control.Monad               ( void )
 import            Control.Monad.Except
 import            Data.Binary                 ( Binary )
@@ -264,16 +266,16 @@ lightReceiveThread nic ss bulbM
             $ decodePacket @GetLight decodedHeader rest
 
         forM payloadE $ \_payload -> do
-          FakeBulbState {..}
+          (FakeBulbState {..}, label)
             <- atomically
-                $ fbState
+                $ (fbState &&& (^. typed @(Label "name")))
               <$> readTVar bulbM
 
           let
             packet
               = pp
               (Reply $ LightReplyType StateLightReply)
-              (StateLight fbsColor 0 fbsLightPowerLevel fbsLabel 0)
+              (StateLight fbsColor 0 fbsLightPowerLevel label 0)
 
           pure $ YesResponse (stream packet)
       (Request (DeviceMessageType GetVersionMessage)) -> do
@@ -356,8 +358,8 @@ lightReceiveThread nic ss bulbM
             <- atomically $ do
               modifyTVar'
                 bulbM
-                (& typed @FakeBulbState . typed @(Label "name") .~ (selLabel pPayload))
-              fbsLabel . fbState <$> readTVar bulbM
+                (& typed @(Label "name") .~ (selLabel pPayload))
+              fbLabel <$> readTVar bulbM
 
 
           let
@@ -379,18 +381,20 @@ lightReceiveThread nic ss bulbM
           printBanner "Set Color Payload " (pPayload p)
 
           -- Should really spion off a thread to handle the duration aspect of chaning color...
-          FakeBulbState {..}
+          (FakeBulbState {..}, label)
             <- atomically $ do
               modifyTVar'
                 bulbM
                 (& typed @FakeBulbState . typed @HSBK .~ secColor)
-              fbState <$> readTVar bulbM
+
+              (fbState &&& (^. typed @(Label "name")))
+                <$> readTVar bulbM
 
           let
             packet
               = pp
               (Reply $ LightReplyType StateLightReply)
-              (StateLight fbsColor 0 fbsLightPowerLevel fbsLabel 0)
+              (StateLight fbsColor 0 fbsLightPowerLevel label 0)
 
           pure $ shouldRespond decodedHeader (stream packet)
       (Request (LightMessageType SetLightPowerMessage)) -> do
@@ -493,16 +497,16 @@ lightReceiveThread nic ss bulbM
         forM payloadE $ \p@(Packet { pPayload = SetWaveform {..} }) -> do
           printBanner "Set Waveform Payload " (pPayload p)
 
-          FakeBulbState {..}
+          (FakeBulbState {..}, label)
             <- atomically
-                $ fbState
+                $ (fbState &&& (^. typed @(Label "name")))
               <$> readTVar bulbM
 
           let
             packet
               = pp
               (Reply $ LightReplyType StateLightReply)
-              (StateLight fbsColor 0 fbsLightPowerLevel fbsLabel 0)
+              (StateLight fbsColor 0 fbsLightPowerLevel label 0)
 
           print packet
           pure $ YesResponse (stream packet)
@@ -517,16 +521,16 @@ lightReceiveThread nic ss bulbM
         forM payloadE $ \p@(Packet { pPayload = SetWaveformOptional {..} }) -> do
           printBanner "Set Waveform Optional Payload " (pPayload p)
 
-          FakeBulbState {..}
+          (FakeBulbState {..}, label)
             <- atomically
-                $ fbState
+                $ (fbState &&& (^. typed @(Label "name")))
               <$> readTVar bulbM
 
           let
             packet
               = pp
               (Reply $ LightReplyType StateLightReply)
-              (StateLight fbsColor 0 fbsLightPowerLevel fbsLabel 0)
+              (StateLight fbsColor 0 fbsLightPowerLevel label 0)
 
           print packet
           pure $ YesResponse (stream packet)
@@ -607,6 +611,7 @@ data FakeBulb
   , fbLocation     :: !FakeBulbLocation
   , fbGroup        :: !FakeBulbGroup
   , fbStartTime    :: !LifxUTC
+  , fbLabel        :: !(Label "name")
   , fbPowerThread  :: (TVar (Maybe (Async ())))
   }
   deriving Generic
@@ -623,6 +628,7 @@ instance Show FakeBulb where
     <> show fbState <> " "
     <> show fbLocation <> " "
     <> show fbGroup <> " "
+    <> show fbLabel <> " "
     <> show fbStartTime <> " "
     <> "PowerThread"
 
@@ -635,10 +641,11 @@ instance Default FakeBulb where
     , fbWifiInfo = def
     , fbWifiFirmware = def
     , fbVersion = def
-    , fbState = def { fbsLabel = Label "Fake Light" }
+    , fbState = def
     , fbLocation = def
     , fbGroup = def
     , fbStartTime = LifxUTC 0
+    , fbLabel = Label "Fake Light"
     , fbPowerThread = undefined
     }
 
@@ -738,7 +745,6 @@ data FakeBulbState
   = FakeBulbState
   { fbsColor :: HSBK
   , fbsLightPowerLevel :: LightPower
-  , fbsLabel :: Label "name"
   , fbsInfraredBrightness :: Word16le
   }
   deriving (Show, Generic)
@@ -748,7 +754,6 @@ instance Default FakeBulbState where
     = FakeBulbState
     { fbsColor = def
     , fbsLightPowerLevel = LightPower 0
-    , fbsLabel = Label "Fake Light"
     , fbsInfraredBrightness = 0
     }
 
