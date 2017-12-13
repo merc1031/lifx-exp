@@ -7,6 +7,7 @@
 {-# LANGUAGE PartialTypeSignatures #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE ViewPatterns #-}
 {-# OPTIONS_GHC -fno-warn-partial-type-signatures #-}
@@ -154,6 +155,7 @@ lightReceiveThread nic ss bulbM
         = BSL.toChunks
         . Bin.encode
 
+    -- | Acknowledge when required
     when (ackR == AckRequired) $ do
 
       let
@@ -199,7 +201,10 @@ lightReceiveThread nic ss bulbM
             $ decodePacket @GetHostFirmware decodedHeader rest
 
         forM payloadE $ \_payload -> do
-          FakeBulbFirmware {..} <- atomically $ fbFirmware <$> readTVar bulbM
+          FakeBulbFirmware {..}
+            <- atomically
+                $ fbFirmware
+              <$> readTVar bulbM
 
           let
             packet
@@ -217,7 +222,10 @@ lightReceiveThread nic ss bulbM
             $ decodePacket @GetWifiFirmware decodedHeader rest
 
         forM payloadE $ \_payload -> do
-          FakeBulbWifiFirmware {..} <- atomically $ fbWifiFirmware <$> readTVar bulbM
+          FakeBulbWifiFirmware {..}
+            <- atomically
+                $ fbWifiFirmware
+              <$> readTVar bulbM
 
           let
             packet
@@ -235,7 +243,10 @@ lightReceiveThread nic ss bulbM
             $ decodePacket @GetWifiInfo decodedHeader rest
 
         forM payloadE $ \_payload -> do
-          FakeBulbWifiInfo {..} <- atomically $ fbWifiInfo <$> readTVar bulbM
+          FakeBulbWifiInfo {..}
+            <- atomically
+                $ fbWifiInfo
+              <$> readTVar bulbM
 
           let
             packet
@@ -253,7 +264,10 @@ lightReceiveThread nic ss bulbM
             $ decodePacket @GetLight decodedHeader rest
 
         forM payloadE $ \_payload -> do
-          FakeBulbState {..} <- atomically $ fbState <$> readTVar bulbM
+          FakeBulbState {..}
+            <- atomically
+                $ fbState
+              <$> readTVar bulbM
 
           let
             packet
@@ -271,7 +285,10 @@ lightReceiveThread nic ss bulbM
             $ decodePacket @GetVersion decodedHeader rest
 
         forM payloadE $ \_payload -> do
-          FakeBulbVersion {..} <- atomically $ fbVersion <$> readTVar bulbM
+          FakeBulbVersion {..}
+            <- atomically
+                $ fbVersion
+              <$> readTVar bulbM
 
           let
             packet
@@ -290,7 +307,10 @@ lightReceiveThread nic ss bulbM
 
         forM payloadE $ \_payload -> do
           t <- getCurrentLifxUTC
-          FakeBulbLocation {..} <- atomically $ fbLocation <$> readTVar bulbM
+          FakeBulbLocation {..}
+            <- atomically
+                $ fbLocation
+              <$> readTVar bulbM
 
           let
             packet
@@ -309,7 +329,10 @@ lightReceiveThread nic ss bulbM
 
         forM payloadE $ \_payload -> do
           t <- getCurrentLifxUTC
-          FakeBulbGroup {..} <- atomically $ fbGroup <$> readTVar bulbM
+          FakeBulbGroup {..}
+            <- atomically
+                $ fbGroup
+              <$> readTVar bulbM
 
           let
             packet
@@ -329,9 +352,12 @@ lightReceiveThread nic ss bulbM
         forM payloadE $ \Packet { pPayload } -> do
           print $ "Told to set label to " <> show pPayload
 
-          label <- atomically $ do
-            modifyTVar' bulbM (& typed @FakeBulbState . typed @(Label "name") .~ (selLabel pPayload))
-            fbsLabel . fbState <$> readTVar bulbM
+          label
+            <- atomically $ do
+              modifyTVar'
+                bulbM
+                (& typed @FakeBulbState . typed @(Label "name") .~ (selLabel pPayload))
+              fbsLabel . fbState <$> readTVar bulbM
 
 
           let
@@ -353,9 +379,12 @@ lightReceiveThread nic ss bulbM
           printBanner "Set Color Payload " (pPayload p)
 
           -- Should really spion off a thread to handle the duration aspect of chaning color...
-          FakeBulbState {..} <- atomically $ do
-            modifyTVar' bulbM (& typed @FakeBulbState . typed @HSBK .~ secColor)
-            fbState <$> readTVar bulbM
+          FakeBulbState {..}
+            <- atomically $ do
+              modifyTVar'
+                bulbM
+                (& typed @FakeBulbState . typed @HSBK .~ secColor)
+              fbState <$> readTVar bulbM
 
           let
             packet
@@ -375,13 +404,19 @@ lightReceiveThread nic ss bulbM
         forM payloadE $ \Packet { pPayload = SetLightPower {..} } -> do
 
           -- If there is a previous power thread kill it (TODO maybe use a channel and a persistent thread)
-          powerThreadV <- atomically $ fbPowerThread <$> readTVar bulbM
-          powerThread <- atomically $ readTVar powerThreadV
-          case powerThread of
-            Just p -> cancel p
-            Nothing -> pure ()
+          (powerThreadV, powerThread)
+            <- atomically $ do
+              pVar <- fbPowerThread <$> readTVar bulbM
+              (pVar, ) <$> readTVar pVar
 
-          LightPower lightPowerLevel <- atomically $ fbsLightPowerLevel . fbState <$> readTVar bulbM
+          forM_ powerThread cancel
+
+          LightPower lightPowerLevel
+            <- atomically
+                $ fbsLightPowerLevel
+                . fbState
+              <$> readTVar bulbM
+
           start <- POSIX.getPOSIXTime
 
           pThread <- async $ do
@@ -391,7 +426,9 @@ lightReceiveThread nic ss bulbM
                 = floor start + selpDuration
               loop
                 = do
-                threadDelay $ floor @Double $ 2 * ((1 * 1000000) / fromIntegral maxMessagesPerSecond) -- Only use 1/2 of our message allotment by sleeping 2 times as long
+                threadDelay
+                  $ floor @Double
+                  $ 2 * ((1 * 1000000) / fromIntegral maxMessagesPerSecond) -- Only use 1/2 of our message allotment by sleeping 2 times as long
                 now <- POSIX.getPOSIXTime
 
                 let
@@ -400,13 +437,20 @@ lightReceiveThread nic ss bulbM
                   smear
                     = lightPowerLevel + ((unLightPower selpLevel - lightPowerLevel) * floor percentage)
 
-                atomically $ modifyTVar' bulbM (& typed @FakeBulbState . typed @LightPower .~ LightPower smear)
+                atomically
+                  $ modifyTVar'
+                      bulbM
+                      (& typed @FakeBulbState . typed @LightPower .~ LightPower smear)
                 -- start = 10     end = 40      now = 20
                 --         20           80
                 when (floor now < end)
                   loop
+            -- | Start the loop
             loop
-          atomically $ modifyTVar' powerThreadV (const $ Just pThread)
+
+          atomically
+            $ modifyTVar' powerThreadV
+            (const $ Just pThread)
 
           let
             packet
@@ -424,9 +468,12 @@ lightReceiveThread nic ss bulbM
             $ decodePacket @SetInfrared decodedHeader rest
 
         forM payloadE $ \Packet { pPayload } -> do
-          infraredBrightness <- atomically $ do
-            modifyTVar' bulbM (& typed @FakeBulbState . typed @Word16le .~ seiBrightness pPayload)
-            fbsInfraredBrightness . fbState <$> readTVar bulbM
+          infraredBrightness
+            <- atomically $ do
+              modifyTVar'
+                bulbM
+                (& typed @FakeBulbState . typed @Word16le .~ seiBrightness pPayload)
+              fbsInfraredBrightness . fbState <$> readTVar bulbM
 
           let
             packet
@@ -446,7 +493,10 @@ lightReceiveThread nic ss bulbM
         forM payloadE $ \p@(Packet { pPayload = SetWaveform {..} }) -> do
           printBanner "Set Waveform Payload " (pPayload p)
 
-          FakeBulbState {..} <- atomically $ fbState <$> readTVar bulbM
+          FakeBulbState {..}
+            <- atomically
+                $ fbState
+              <$> readTVar bulbM
 
           let
             packet
@@ -467,7 +517,10 @@ lightReceiveThread nic ss bulbM
         forM payloadE $ \p@(Packet { pPayload = SetWaveformOptional {..} }) -> do
           printBanner "Set Waveform Optional Payload " (pPayload p)
 
-          FakeBulbState {..} <- atomically $ fbState <$> readTVar bulbM
+          FakeBulbState {..}
+            <- atomically
+                $ fbState
+              <$> readTVar bulbM
 
           let
             packet
@@ -514,13 +567,17 @@ lightReceiveThread nic ss bulbM
   replicateM_ 4 $ print @String spaces100
 
   where
-    incrTx (BS.concat -> BS.length -> fromIntegral -> len) = atomically $ modifyTVar'
-      bulbM
-      (& typed @FakeBulbWifiInfo . field @"fbwiTx" %~ (+ len))
+    incrTx (BS.concat -> BS.length -> fromIntegral -> len)
+      = atomically
+      $ modifyTVar'
+          bulbM
+          (& typed @FakeBulbWifiInfo . field @"fbwiTx" %~ (+ len))
 
-    incrRx (BSL.length -> fromIntegral -> len) = atomically $ modifyTVar'
-      bulbM
-      (& typed @FakeBulbWifiInfo . field @"fbwiRx" %~ (+ len))
+    incrRx (BSL.length -> fromIntegral -> len)
+      = atomically
+      $ modifyTVar'
+          bulbM
+          (& typed @FakeBulbWifiInfo . field @"fbwiRx" %~ (+ len))
 
     printBanner msg p
       = do
