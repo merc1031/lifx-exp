@@ -24,7 +24,7 @@ import Control.Exception
 import Data.Default
 import Data.Word
 import            Data.Function
-import            Data.Generics.Internal.Lens
+import            Lens.Micro.Platform
 import            Data.Generics.Product
 import            Data.Generics.Sum
 import            GHC.Generics
@@ -460,26 +460,12 @@ lightReceiveThread nic ss bulbM
   print "                                                                                                    "
   print "                                                                                                    "
   where
-    incrTx bss = atomically $ modifyTVar'
+    incrTx (BS.concat -> BS.length -> fromIntegral -> len) = atomically $ modifyTVar'
       bulbM
-      (\fb ->
-        let
-          fbw = fbWifiInfo fb
-          fbwiTx' = fbwiTx fbw + (fromIntegral $ BS.length $ BS.concat bss)
-          fbw' = fbw { fbwiTx = fbwiTx' }
-        in
-          fb { fbWifiInfo = fbw' }
-      )
-    incrRx bsl = atomically $ modifyTVar'
+      (& typed @FakeBulbWifiInfo . field @"fbwiTx" %~ (+ len))
+    incrRx (BSL.length -> fromIntegral -> len) = atomically $ modifyTVar'
       bulbM
-      (\fb ->
-        let
-          fbw = fbWifiInfo fb
-          fbwiRx' = fbwiRx fbw + (fromIntegral $ BSL.length bsl)
-          fbw' = fbw { fbwiRx = fbwiRx' }
-        in
-          fb { fbWifiInfo = fbw' }
-      )
+      (& typed @FakeBulbWifiInfo . field @"fbwiRx" %~ (+ len))
 
 
 data FakeBulb
