@@ -49,6 +49,7 @@ sendToLight ss@SharedState {} Light {..}
   where
     d@Device {..} = lDevice
 
+
 sendToDevice
   :: ( Binary a
      )
@@ -86,6 +87,7 @@ broadcast sock bcast a
   in
     sendManyTo sock (BSL.toChunks enc) bcast
 
+
 decodeHeader
   :: Maybe UniqueSource
   -> BSL.ByteString
@@ -103,6 +105,7 @@ decodeHeader uniqSrc bs
     when (isJust uniqSrc && Just packetSource /= uniqSrc)
       $ throwE $ ImproperSourceInHeader hdr bs rema cons
     pure (hdr, rema)
+
 
 decodePacket
   :: ( Binary a
@@ -128,6 +131,7 @@ mkFrame
 mkFrame par tag
   = Frame (size par) 0 tag HasFrameAddress 1024
 
+
 mkFrameAddress
   :: Target
   -> AckRequired
@@ -137,11 +141,13 @@ mkFrameAddress
 mkFrameAddress tar
   = FrameAddress tar (UnusedMac $ Mac ((), (), (), (), (), ())) ()
 
+
 mkProtocolHeader
   :: Direction
   -> ProtocolHeader
 mkProtocolHeader typ
   = ProtocolHeader 0 typ ()
+
 
 mkRequestPacket
   :: ( WithSize a
@@ -166,6 +172,7 @@ mkRequestPacket tag src tar ack res sequ typ pay
     p = Packet f fa ph pay
   in
     p
+
 
 mkPacket
   :: ( WithSize a
@@ -218,6 +225,7 @@ newDiscoveryPacket ss@SharedState {..} runCb
         p { pFrame = pFrame' }
   pure $ pp GetService
 
+
 newPacket'
   :: forall a
    . ( MessageIdC a )
@@ -226,6 +234,7 @@ newPacket'
   -> IO (a -> Packet a)
 newPacket' ss@SharedState {..} runCb
   = newPacket ss runCb id
+
 
 newPacket
   :: forall a
@@ -246,4 +255,3 @@ newPacket ss@SharedState {..} runCb modify
     NoResRequired
     nextSeq
     (msgTypP (Proxy :: Proxy a))
-

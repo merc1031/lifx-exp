@@ -113,7 +113,6 @@ import            Network.Socket.ByteString
 import            Numeric                       ( showHex )
 import            Text.Printf
 import            System.Environment
---import            Test.QuickCheck               (Arbitrary (..) )
 import qualified  Data.Binary                   as Bin
 import qualified  Data.Binary.Bits              as Bits
 import qualified  Data.Binary.Get               as BinG
@@ -129,7 +128,6 @@ import            Home.Lights.LIFX.Transport
 import            Home.Lights.LIFX.Types
 
 
-
 maxMessagesPerSecond
   :: Word8
 maxMessagesPerSecond
@@ -142,12 +140,14 @@ listCached
 listCached SharedState {..}
   = HM.elems <$> atomically (readTVar ssDevices)
 
+
 hue
   :: Float
   -> Maybe Hue
 hue v
   | v >= 0 && v <= 360 = Just $ Hue $ floor $ v / 360 * 65535
   | otherwise = Nothing
+
 
 saturation
   :: Float
@@ -156,12 +156,14 @@ saturation v
   | v >= 0 && v <= 100 = Just $ Saturation $ floor $ v / 100 * 65535
   | otherwise = Nothing
 
+
 brightness
   :: Float
   -> Maybe Brightness
 brightness v
   | v >= 0 && v <= 100 = Just $ Brightness $ floor $ v / 100 * 65535
   | otherwise = Nothing
+
 
 kelvin
   :: Float
@@ -181,32 +183,6 @@ serviceUDP
   :: Word8
 serviceUDP
   = 1
-
-
-
-
-
-
--- size
--- origin
--- tagged
--- addressable
--- protocol
--- source
--- target
--- reserved
--- reserved
--- ack
--- res
--- sequence
--- reserved
--- type
--- reserved
--- 16|2|1|1|12|32|64|48|6|1|1|8|64|16|16
--- ui|ui|b|b|ui|ui|ui|ui|r|b|b|ui|ui|ui|r
---                   [6]
-
-
 
 
 uniqueSource
@@ -235,6 +211,7 @@ receiveThread ss@SharedState {..}
           payloadE = runExcept $ runDecode header rest
         forM_ payloadE $ \payload ->
           runCallback ss payload sa bsl
+
 
 onStateService
   :: SharedState
@@ -315,6 +292,7 @@ getWifiFirmware ss d
   ssLogFunction ss LogDebug $ "Got wifi firmware: " <> show p
   updateWifiFirmware ss d p
 
+
 updateHostFirmware
   :: SharedState
   -> Device
@@ -382,6 +360,7 @@ getVersion ss d
   ssLogFunction ss LogDebug $ "Got version: " <> show p
   updateVersion ss d p
 
+
 updateLocation
   :: SharedState
   -> Device
@@ -423,6 +402,7 @@ updateGroup SharedState {..} Device {..} Packet {..}
   where
     StateGroup {..} = pPayload
 
+
 getGroup
   :: SharedState
   -> Device
@@ -433,6 +413,7 @@ getGroup ss d
     StateGroup {..} = pPayload
   ssLogFunction ss LogDebug $ "Got Group: " <> show p
   updateGroup ss d p
+
 
 updateLabel
   :: SharedState
@@ -448,6 +429,7 @@ updateLabel SharedState {..} Device {..} Packet {..}
   where
     StateLabel {..} = pPayload
 
+
 getLabel
   :: SharedState
   -> Device
@@ -458,6 +440,7 @@ getLabel ss d
     StateLabel {..} = pPayload
   ssLogFunction ss LogDebug $ "Got Label: " <> show p
   updateLabel ss d p
+
 
 updateLightPower
   :: SharedState
@@ -473,6 +456,7 @@ updateLightPower SharedState {..} Device {..} Packet {..}
   where
     StateLightPower {..} = pPayload
 
+
 getLightPower
   :: SharedState
   -> Device
@@ -483,6 +467,7 @@ getLightPower ss d
     StateLightPower {..} = pPayload
   ssLogFunction ss LogDebug $ "Got LightPower: " <> show p
   updateLightPower ss d p
+
 
 updateLight
   :: SharedState
@@ -507,6 +492,7 @@ updateLight SharedState {..} Device {..} Packet {..}
   where
     StateLight {..} = pPayload
 
+
 getLight
   :: SharedState
   -> Device
@@ -517,6 +503,7 @@ getLight ss d
     StateLight {..} = pPayload
   ssLogFunction ss LogDebug $ "Got Light: " <> show p
   updateLight ss d p
+
 
 outerGet
   :: forall get
@@ -535,7 +522,6 @@ outerGet ss d pay cb
   sendToDevice ss d np
 
 
-
 socketAddrToDeviceSocketAddr
   :: SockAddr
   -> Maybe DeviceSocketAddress
@@ -543,6 +529,7 @@ socketAddrToDeviceSocketAddr (SockAddrInet pa ha)
   = Just $ DeviceSocketAddress pa (DeviceAddress $ Word32le ha)
 socketAddrToDeviceSocketAddr _
   = Nothing
+
 
 discoveryThread
   :: SharedState
@@ -557,6 +544,7 @@ discoveryThread ss@SharedState {..} bcast
     gsp
   threadDelay $ 10 * 1000000
 
+
 toLogLevel
   :: String
   -> Maybe LogLevel
@@ -568,6 +556,7 @@ toLogLevel (map toLower -> s)
       "info" -> Just LogInfo
       "debug" -> Just LogDebug
       _ -> Nothing
+
 
 mkState
   :: IO AppState
@@ -607,6 +596,23 @@ mkState
   pure $ AppState sharedState asReceiveThread asDiscoveryThread
 
 
-
-
-
+{-
+size
+origin
+tagged
+addressable
+protocol
+source
+target
+reserved
+reserved
+ack
+res
+sequence
+reserved
+type
+reserved
+16|2|1|1|12|32|64|48|6|1|1|8|64|16|16
+ui|ui|b|b|ui|ui|ui|ui|r|b|b|ui|ui|ui|r
+                  [6]
+-}
