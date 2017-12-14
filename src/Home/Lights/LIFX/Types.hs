@@ -23,111 +23,60 @@
 {-# LANGUAGE TypeFamilyDependencies #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE ViewPatterns #-}
-{-# OPTIONS_GHC -fno-warn-unused-imports #-}
 
 module Home.Lights.LIFX.Types where
 
 import            Control.Applicative           ( (<|>) )
-import            Control.Arrow
-import            Control.Concurrent
 import            Control.Concurrent.Async
 import            Control.Concurrent.STM
-import            Control.Concurrent.STM.TQueue
 import            Control.DeepSeq
 import            Control.DeepSeq.Generics
-import            Data.Void
 import            GHC.Generics
 import            Control.Exception
-import            Control.Monad                 ( forM_
-                                                , replicateM_
+import            Control.Monad                 ( replicateM_
                                                 , when
-                                                , forever
                                                 , void
                                                 )
 import            Control.Monad.Except
-import            Control.Monad.IO.Class        ( MonadIO
-                                                , liftIO
-                                                )
-import            Control.Monad.Trans.Except
-import            Control.Monad.Trans.Control
-import            Control.Monad.Trans.Maybe
-import            Data.Array.MArray             ( writeArray
-                                                , readArray
-                                                , newArray_
-                                                , newListArray
-                                                )
 import            Data.Binary                   ( Binary (..)
-                                                , Get
                                                 , Put
                                                 )
 import            Data.Binary.IEEE754
-import            Data.Bits                     ( zeroBits
-                                                , Bits(..)
-                                                , FiniteBits(..)
+import            Data.Bits                     ( Bits(..)
                                                 , bit
                                                 , shiftR
                                                 , shiftL
                                                 , testBit
                                                 )
 import            Data.Bool                     ( bool )
-import            Data.Char                     ( intToDigit
-                                                , isPrint
-                                                , toLower
-                                                )
-import            Data.Coerce
+import            Data.Char                     ( isPrint )
 import            Data.Default
-import            Data.Functor.Identity         ( Identity )
-import            Data.Generics.Product
-import            Data.Generics.Sum
 import            Data.Hashable                 ( Hashable )
-import            Data.Int                      ( Int8
-                                                , Int16
+import            Data.Int                      ( Int16
                                                 , Int32
                                                 , Int64
                                                 )
-import            Data.Maybe                    ( isJust
-                                                , fromJust
-                                                )
 import            Data.Monoid                   ( (<>) )
 import            Data.Proxy
-import            Data.Time.Clock
-import            Data.Time.Clock.POSIX
 import            Data.Word                     ( Word8
                                                 , Word16
                                                 , Word32
                                                 , Word64
                                                 )
-import            GHC.Prim
 import            GHC.TypeLits
 import            Network.Socket                ( Socket (..)
                                                 , SockAddr (..)
-                                                , tupleToHostAddress
                                                 , hostAddressToTuple
-                                                , SocketOption (..)
-                                                , setSocketOption
-                                                , isSupportedSocketOption
-                                                , bind
-                                                , defaultProtocol
-                                                , aNY_PORT
-                                                , socket
-                                                , Family(AF_INET)
-                                                , SocketType(Datagram)
                                                 , PortNumber
                                                 )
-import            Network.Socket.ByteString
-import            Numeric                       ( showHex )
 import            Text.Printf
-import            System.Environment
 import qualified  Data.Binary                   as Bin
-import qualified  Data.Binary.Bits              as Bits
 import qualified  Data.Binary.Get               as BinG
 import qualified  Data.Binary.Put               as BinP
-import qualified  Data.ByteString.Base16.Lazy   as BSL16
 import qualified  Data.ByteString.Lazy          as BSL
 import qualified  Data.HashMap.Strict           as HM
 import qualified  Data.Text.Lazy                as TL
 import qualified  Data.Text.Lazy.Encoding       as TLE
-import qualified  Network.Info                  as NI
 
 class MessageId a where
   type StateReply a
