@@ -90,14 +90,34 @@ data SomePayload
 
 directionToSomePayload
   :: Direction
-  -> SomePayload
+  -> Either String SomePayload
 directionToSomePayload
   = \case
   Request (DeviceMessageType x) -> deviceMessagetoSomePayload x
+  Request (LightMessageType x) -> lightMessagetoSomePayload x
+  m -> Left $ "No reply for packet type" <> show m
   where
     deviceMessagetoSomePayload
       = \case
-      GetServiceMessage -> SomePayload $ Proxy @GetService
+      GetServiceMessage -> Right $ SomePayload $ Proxy @GetService
+      GetHostFirmwareMessage -> Right $ SomePayload $ Proxy @GetService
+      GetWifiFirmwareMessage -> Right $ SomePayload $ Proxy @GetService
+      GetWifiInfoMessage -> Right $ SomePayload $ Proxy @GetService
+      GetVersionMessage -> Right $ SomePayload $ Proxy @GetService
+      GetLocationMessage -> Right $ SomePayload $ Proxy @GetService
+      GetGroupMessage -> Right $ SomePayload $ Proxy @GetService
+      GetLabelMessage -> Right $ SomePayload $ Proxy @GetService
+      GetUnknown54Message -> Right $ SomePayload $ Proxy @GetService
+      m -> Left $ "No reply for packet type" <> show m
+    lightMessagetoSomePayload
+      = \case
+      GetLightMessage -> Right $ SomePayload $ Proxy @GetService
+      SetColorMessage -> Right $ SomePayload $ Proxy @GetService
+      SetLightPowerMessage -> Right $ SomePayload $ Proxy @GetService
+      SetInfraredMessage -> Right $ SomePayload $ Proxy @GetService
+      SetWaveformMessage -> Right $ SomePayload $ Proxy @GetService
+      SetWaveformOptionalMessage -> Right $ SomePayload $ Proxy @GetService
+      m -> Left $ "No reply for packet type" <> show m
 
 
 instance OnLifx GetService where
@@ -118,6 +138,7 @@ instance OnLifx GetService where
           (Reply $ DeviceReplyType StateServiceReply)
           (StateService 1 56700)
 
+      liftIO $ print $ "GetService: " <> show decodedHeader <> " " <> show packet
       pure $ YesResponse (stream packet)
 
 
@@ -633,43 +654,15 @@ lightReceiveThread nic ss bulbM
       <> show ackR <> " "
       <> show resR
 
-    case msgT of
-      (Request (DeviceMessageType GetServiceMessage)) ->
-        case directionToSomePayload msgT of
-          SomePayload p ->
-            flip runReaderT (bulbM, pp, decodedHeader, rest) $ onReq p
-      (Request (DeviceMessageType GetHostFirmwareMessage)) ->
-        flip runReaderT (bulbM, pp, decodedHeader, rest) $ onReq (Proxy :: Proxy GetHostFirmware)
-      (Request (DeviceMessageType GetWifiFirmwareMessage)) ->
-        flip runReaderT (bulbM, pp, decodedHeader, rest) $ onReq (Proxy :: Proxy GetWifiFirmware)
-      (Request (DeviceMessageType GetWifiInfoMessage)) ->
-        flip runReaderT (bulbM, pp, decodedHeader, rest) $ onReq (Proxy :: Proxy GetWifiInfo)
-      (Request (LightMessageType GetLightMessage)) ->
-        flip runReaderT (bulbM, pp, decodedHeader, rest) $ onReq (Proxy :: Proxy GetLight)
-      (Request (DeviceMessageType GetVersionMessage)) -> do
-        flip runReaderT (bulbM, pp, decodedHeader, rest) $ onReq (Proxy :: Proxy GetVersion)
-      (Request (DeviceMessageType GetLocationMessage)) -> do
-        flip runReaderT (bulbM, pp, decodedHeader, rest) $ onReq (Proxy :: Proxy GetLocation)
-      (Request (DeviceMessageType GetGroupMessage)) -> do
-        flip runReaderT (bulbM, pp, decodedHeader, rest) $ onReq (Proxy :: Proxy GetGroup)
-      (Request (DeviceMessageType SetLabelMessage)) -> do
-        flip runReaderT (bulbM, pp, decodedHeader, rest) $ onReq (Proxy :: Proxy SetLabel)
-      (Request (LightMessageType SetColorMessage)) -> do
-        flip runReaderT (bulbM, pp, decodedHeader, rest) $ onReq (Proxy :: Proxy SetColor)
-      (Request (LightMessageType SetLightPowerMessage)) -> do
-        flip runReaderT (bulbM, pp, decodedHeader, rest) $ onReq (Proxy :: Proxy SetLightPower)
-      (Request (LightMessageType SetInfraredMessage)) -> do
-        flip runReaderT (bulbM, pp, decodedHeader, rest) $ onReq (Proxy :: Proxy SetInfrared)
-      (Request (LightMessageType SetWaveformMessage)) -> do
-        flip runReaderT (bulbM, pp, decodedHeader, rest) $ onReq (Proxy :: Proxy SetWaveform)
-      (Request (LightMessageType SetWaveformOptionalMessage)) -> do
-        flip runReaderT (bulbM, pp, decodedHeader, rest) $ onReq (Proxy :: Proxy SetWaveformOptional)
-      (Request (DeviceMessageType GetUnknown54Message)) -> do
-        flip runReaderT (bulbM, pp, decodedHeader, rest) $ onReq (Proxy :: Proxy GetUnknown54)
-      _ -> (Left $ UnknownPacketError "")
-        <$ (liftIO $ print $ "Header: " <> show decodedHeader <> " Rest: " <> show rest)
+    case directionToSomePayload msgT of
+      Right (SomePayload p) ->
+        flip runReaderT (bulbM, pp, decodedHeader, rest) $ onReq p
+      Left err ->
+          (Left $ UnknownPacketError "")
+       <$ (liftIO $ print $ "Header: " <> show decodedHeader <> " Rest: " <> show rest <> " Message: " <> err)
 
 
+  print encoded
 
   -- | Unwrap Maybe
   forM_ encoded $ \enc ->
@@ -677,6 +670,7 @@ lightReceiveThread nic ss bulbM
     forM_ enc $ \case
       NoResponse -> pure ()
       YesResponse msg -> do
+        print $ "Sending response" <> show msg
         sendManyTo ss msg sa
         incrTx msg
 
@@ -906,7 +900,7 @@ instance Default FakeBulbLocation where
   def
     = FakeBulbLocation
     -- | Got from dump from real lights
-    { fblLocationId = LocationId $ ByteId16 [191,85,176,70,10,79,235,23,234,91,5,109,79,82,97,227]
+    { fblLocationId = LocationId $ ByteId16 [91,85,176,70,10,79,235,23,234,91,5,109,79,82,97,227]
     , fblLabel = Label "Home"
     }
 
@@ -923,7 +917,7 @@ instance Default FakeBulbGroup where
   def
     = FakeBulbGroup
     -- | Got from dump from real lights
-    { fbgGroupId = GroupId $ ByteId16 [47,223,129,99,224,228,225,11,76,216,163,23,127,156,239,247]
+    { fbgGroupId = GroupId $ ByteId16 [7,223,129,99,224,228,225,11,76,216,163,23,127,156,239,247]
     , fbgLabel = Label "Lab"
     }
 
