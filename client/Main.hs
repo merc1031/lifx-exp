@@ -16,6 +16,7 @@ import qualified  Data.Binary               as Bin
 import qualified  Data.List                 as L
 
 import            Lib
+import            Home.Lights.LIFX.Transport
 import            Home.Lights.LIFX.Types
 
 newtype Config

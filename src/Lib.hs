@@ -131,145 +131,10 @@ import qualified  Data.Text.Lazy                as TL
 import qualified  Data.Text.Lazy.Encoding       as TLE
 import qualified  Network.Info                  as NI
 
+import            Home.Lights.LIFX.Transport
 import            Home.Lights.LIFX.Types
 
 
--- | Documented and undocumented message types from controlifx
--- SetSiteType                         = 1
--- GetServiceType                      = 2
--- StateServiceType                    = 3
--- GetTimeType                         = 4
--- SetTimeType                         = 5
--- StateTimeType                       = 6
--- GetResetSwitchType                  = 7
--- StateResetSwitchType                = 8
--- GetDummyLoadType                    = 9
--- SetDummyLoadType                    = 10
--- StateDummyLoadType                  = 11
--- GetHostInfoType                     = 12
--- StateHostInfoType                   = 13
--- GetHostFirmwareType                 = 14
--- StateHostFirmwareType               = 15
--- GetWifiInfoType                     = 16
--- StateWifiInfoType                   = 17
--- GetWifiFirmwareType                 = 18
--- StateWifiFirmwareType               = 19
--- GetPowerType                        = 20
--- SetPowerType                        = 21
--- StatePowerType                      = 22
--- GetLabelType                        = 23
--- SetLabelType                        = 24
--- StateLabelType                      = 25
--- GetTagsType                         = 26
--- SetTagsType                         = 27
--- StateTagsType                       = 28
--- GetTagLabelsType                    = 29
--- SetTagLabelsType                    = 30
--- StateTagLabelsType                  = 31
--- GetVersionType                      = 32
--- StateVersionType                    = 33
--- GetInfoType                         = 34
--- StateInfoType                       = 35
--- GetMcuRailVoltageType               = 36
--- StateMcuRailVoltageType             = 37
--- SetRebootType                       = 38
--- SetFactoryTestModeType              = 39
--- DisableFactoryTestModeType          = 40
--- StateFactoryTestModeType            = 41
--- StateSiteType                       = 42
--- StateRebootType                     = 43
--- SetPanGatewayType                   = 44
--- AcknowledgementType                 = 45
--- SetFactoryResetType                 = 46
--- StateFactoryResetType               = 47
--- GetLocationType                     = 48
--- SetLocationType                     = 49
--- StateLocationType                   = 50
--- GetGroupType                        = 51
--- SetGroupType                        = 52
--- StateGroupType                      = 53
--- GetOwnerType                        = 54
--- SetOwnerType                        = 55
--- StateOwnerType                      = 56
--- GetFactoryTestModeType              = 57
--- EchoRequestType                     = 58
--- EchoResponseType                    = 59
--- LightGetType                        = 101
--- LightSetColorType                   = 102
--- LightSetWaveformType                = 103
--- LightSetDimAbsoluteType             = 104
--- LightSetDimRelativeType             = 105
--- LightSetRgbwType                    = 106
--- LightStateType                      = 107
--- LightGetRailVoltageType             = 108
--- LightStateRailVoltageType           = 109
--- LightGetTemperatureType             = 110
--- LightStateTemperatureType           = 111
--- LightSetCalibrationCoefficientsType = 112
--- LightSetSimpleEventType             = 113
--- LightGetSimpleEventType             = 114
--- LightStateSimpleEventType           = 115
--- LightGetPowerType                   = 116
--- LightSetPowerType                   = 117
--- LightStatePowerType                 = 118
--- LightSetWaveformOptionalType        = 119
--- WanGetType                          = 201
--- WanSetType                          = 202
--- WanStateType                        = 203
--- WanGetAuthKeyType                   = 204
--- WanSetAuthKeyType                   = 205
--- WanStateAuthKeyType                 = 206
--- WanSetKeepAliveType                 = 207
--- WanStateKeepAliveType               = 208
--- WanSetHostType                      = 209
--- WanGetHostType                      = 210
--- WanStateHostType                    = 211
--- WifiGetType                         = 301
--- WifiSetType                         = 302
--- WifiStateType                       = 303
--- WifiGetAccessPointsType             = 304
--- WifiSetAccessPointType              = 305
--- WifiStateAccessPointsType           = 306
--- WifiGetAccessPointType              = 307
--- WifiStateAccessPointType            = 308
--- WifiSetAccessPointBroadcastType     = 309
--- SensorGetAmbientLightType           = 401
--- SensorStateAmbientLightType         = 402
--- SensorGetDimmerVoltageType          = 403
--- SensorStateDimmerVoltageType        = 404
-
---data PH a = PH Word16le (Proxy a)
---data P a = P (PH a) a
---
---data PHolder a = PHolder (Proxy a, Word16le)
---
---instance KnownNat n => Binary (PHolder n) where
---  get = do
---    mip <- Bin.get
---    if mip == (fromIntegral $ natVal (Proxy :: Proxy n))
---    then
---      pure $ PHolder (Proxy :: Proxy n, mip)
---    else
---      fail "uh"
---
---  put (PHolder (Proxy, mip)) = Bin.put mip
---
---instance KnownNat n => Binary (PHolder n) where
---  get = do
---    mip <- Bin.get
---    if mip == (fromIntegral $ natVal (Proxy :: Proxy n))
---    then
---      pure $ PHolder (Proxy :: Proxy n, mip)
---    else
---      fail "uh"
---
---  put (PHolder (Proxy, mip)) = Bin.put mip
---  parseJSON (A.String s)
---    | s == pack (symbolVal (Proxy :: Proxy s))
---      = return (Proxy :: Proxy s)
---
---  parseJSON _ = mzero
---
 
 maxMessagesPerSecond
   :: Word8
@@ -312,121 +177,11 @@ kelvin v
   | otherwise = Nothing
 
 
--- | 54 undocumented messages
---  $\NUL\NUL\DC4\244Q\n\SO\208s\143\134\191\175\NUL\NUL\NUL\NUL\NUL\NUL\NUL\NUL\STX\v\NUL\NUL\NUL\NUL\NUL\NUL\NUL\NUL6\NUL\NUL\NUL
---
-
-
-
---type family MessageId2 st = p | p -> st where
---  MessageId2 StateLight = (GetLight, Void)
---  MessageId2 StateLightPower = (GetLightPower, SetLightPower)
---
---
---type family In n h where
---  In n (n, r) = True
---  In n (r, n) = True
---
---type family GetP h where
---  GetP (n, r) = n
---
---type family SetP h where
---  SetP (r, Void) = Void
---  SetP (r, n) = n
---
---
---data SrcP
---  = GetPacket
---  | SetPacket
---
---type family Ps srcp tpl where
---  Ps GetPacket (g,s) = g
---  Ps SetPacket (g,s) = s
---
---outerGetT
---  :: forall get res g
---   . 
---   ( res ~ MessageId2 get
---     , g ~ GetP res
---     )
---  => SharedState
---  -> Device
---  -> (SharedState -> Packet get -> SockAddr -> BSL.ByteString -> IO ())
---  -> IO ()
---outerGetT ss d cb
---  = do
---  p <- newPacket' ss cb
---  let
---    fp = p @g msgCons
---    np = fp { pFrameAddress = (pFrameAddress fp) { faTarget = deviceIdToTarget $ dDeviceId d} }
---  sendToDevice ss d np
---
---
---newPacketT' ss@(SharedState {..}) runCb
---  = newPacket ss runCb id
---
---newPacketT
---  :: forall get
---   .  ()
---  => SharedState
---  -> (SharedState -> Packet get -> SockAddr -> BSL.ByteString -> IO ())
---  -> (Packet a -> Packet a)
---  -> IO (a -> Packet a)
---newPacketT ss@(SharedState {..}) runCb modify
---  = do
---  nextSeq <- ssNextSeq
---  setCallbackForSeq ss nextSeq $ CallbackWrap decodePacket runCb
---  pure $ modify . mkPacket
---    SingleTagged
---    uniqueSource
---    (word64leToTarget 0)
---    NoAckRequired
---    NoResRequired
---    nextSeq
---    (msgTypP (Proxy :: Proxy a))
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 getCurrentLifxUTC
   :: IO LifxUTC
 getCurrentLifxUTC
   = (LifxUTC . floor . (* 1000000000) . utcTimeToPOSIXSeconds) <$> getCurrentTime
 
-
--- 1 1 Original 1000 Yes No No
--- 1 3 Color 650 Yes No No
--- 1 10 White 800 (Low Voltage) No No No
--- 1 11 White 800 (High Voltage) No No No
--- 1 18 White 900 BR30 (Low Voltage) No No No
--- 1 20 Color 1000 BR30 Yes No No
--- 1 22 Color 1000 Yes No No
--- 1 27 LIFX A19 Yes No No
--- 1 28 LIFX BR30 Yes No No
--- 1 29 LIFX+ A19 Yes Yes No
--- 1 30 LIFX+ BR30 Yes Yes No
--- 1 31 LIFX Z Yes No Yes
--- 1 32 LIFX Z 2 Yes No Yes
--- 1 36 LIFX Downlight Yes No No
--- 1 37 LIFX Downlight Yes No No
--- 1 43 LIFX A19 Yes No No
--- 1 44 LIFX BR30 Yes No No
--- 1 45 LIFX+ A19 Yes Yes No
--- 1 46 LIFX+ BR30 Yes Yes No
--- 1 49 LIFX Mini Yes No No
--- 1 50 LIFX Mini Day and Dusk No No No
--- 1 51 LIFX Mini White No No No
--- 1 52 LIFX GU10 Yes No No
 
 mkFrame
   :: WithSize a
@@ -506,61 +261,8 @@ serviceUDP
 --                   [6]
 
 
-broadcast
-  :: ( Binary a
-     , Show a
-     )
-  => Socket
-  -> SockAddr
-  -> a
-  -> IO ()
-broadcast sock bcast a
-  =
-  let
-    enc = Bin.encode a
-  in
-    sendManyTo sock (BSL.toChunks enc) bcast
 
 
-
-deviceIdToTarget
-  :: DeviceId
-  -> Target
-deviceIdToTarget (DeviceId m)
-  = Target m
-
-
-decodeHeader
-  :: Maybe UniqueSource
-  -> BSL.ByteString
-  -> Except HeaderDecodeError (Header, BSL.ByteString)
-decodeHeader uniqSrc bs
-  = case Bin.decodeOrFail bs of
-  Left (str, offset, err) ->
-    throwE $ NotAHeader err bs str offset
-  Right (rema, cons, hdr) -> do
-    let
-      packetSize = fSize $ hFrame hdr
-      packetSource = fSource $ hFrame hdr
-    when (packetSize /= fromIntegral (BSL.length bs))
-      $ throwE $ ImproperSizeInHeader hdr bs rema cons
-    when (isJust uniqSrc && Just packetSource /= uniqSrc)
-      $ throwE $ ImproperSourceInHeader hdr bs rema cons
-    pure (hdr, rema)
-
-decodePacket
-  :: ( Binary a
-     , WithSize a
-     )
-  => Header
-  -> BSL.ByteString
-  -> Except PayloadDecodeError (Packet a)
-decodePacket hdr rema
-  = case Bin.decodeOrFail rema of
-  Left (str, offset, err) ->
-    throwE $ PayloadDecodeFailed hdr rema str offset err
-  Right (_, _, payload) ->
-    pure $ packetFromHeader hdr payload
 
 uniqueSource
   :: UniqueSource
@@ -634,19 +336,6 @@ onStateService ss@(SharedState {..}) Packet {..} sa _orig
     StateService {..} = pPayload
     queries = [getLocation, getGroup, getLabel, getLightPower, getLight, getVersion, getHostFirmware, getWifiFirmware]
 
-sendToDevice
-  :: ( Binary a
-     )
-  => SharedState
-  -> Device
-  -> Packet a
-  -> IO ()
-sendToDevice SharedState {..} Device {..} packet
-  = sendManyTo ssSocket (BSL.toChunks bytes) (SockAddrInet p w)
-  where
-    DeviceSocketAddress p (DeviceAddress (unWord32le -> w)) = dAddr
-    bytes = Bin.encode np
-    np = packet { pFrameAddress = (pFrameAddress packet) { faTarget = deviceIdToTarget dDeviceId} }
 
 updateWifiFirmware
   :: SharedState
@@ -1041,16 +730,6 @@ mkState
   pure $ AppState sharedState asReceiveThread asDiscoveryThread
 
 
-packetFromHeader
-  :: ( Binary a
-     , WithSize a
-     )
-  => Header
-  -> a
-  -> Packet a
-packetFromHeader Header {..} payload
-  = Packet hFrame hFrameAddress hProtocolHeader payload
-
 mkTestFrame
   :: WithSize a
   => Packet a
@@ -1099,15 +778,4 @@ mkTestPacket tag src tar ack res sequ typ pay
     p
 
 
-sendToLight
-  :: ( Binary a
-     )
-  => SharedState
-  -> Light
-  -> Packet a
-  -> IO ()
-sendToLight ss@(SharedState {}) Light {..} packet
-  = sendToDevice ss d packet
-  where
-    d@(Device {..}) = lDevice
 

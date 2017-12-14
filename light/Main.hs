@@ -62,6 +62,7 @@ import qualified  Data.Time.Clock.POSIX       as  POSIX
 import qualified  Network.Info                as  NI
 
 import            Lib
+import            Home.Lights.LIFX.Transport
 import            Home.Lights.LIFX.Types
 
 lightReceiveThread

@@ -21,6 +21,7 @@ flag profiling
 library
   hs-source-dirs:      src
   exposed-modules:      Lib
+                      , Home.Lights.LIFX.Transport
                       , Home.Lights.LIFX.Types
   build-depends:       base >= 4.7 && < 5
                       , base16-bytestring

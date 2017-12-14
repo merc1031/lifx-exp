@@ -1971,6 +1971,16 @@ instance Binary Header where
     pure Header {..}
 
 
+packetFromHeader
+  :: ( Binary a
+     , WithSize a
+     )
+  => Header
+  -> a
+  -> Packet a
+packetFromHeader Header {..} payload
+  = Packet hFrame hFrameAddress hProtocolHeader payload
+
 
 
 taggedToBool
@@ -2346,3 +2356,107 @@ word16leToReplyType 506
   = Right $ MultiZoneReplyType StateMultiZoneReply
 word16leToReplyType x
   = Left $ "no case for " <> show x
+
+-- | Documented and undocumented message types
+-- SetSiteType                         = 1
+-- GetServiceType                      = 2
+-- StateServiceType                    = 3
+-- GetTimeType                         = 4
+-- SetTimeType                         = 5
+-- StateTimeType                       = 6
+-- GetResetSwitchType                  = 7
+-- StateResetSwitchType                = 8
+-- GetDummyLoadType                    = 9
+-- SetDummyLoadType                    = 10
+-- StateDummyLoadType                  = 11
+-- GetHostInfoType                     = 12
+-- StateHostInfoType                   = 13
+-- GetHostFirmwareType                 = 14
+-- StateHostFirmwareType               = 15
+-- GetWifiInfoType                     = 16
+-- StateWifiInfoType                   = 17
+-- GetWifiFirmwareType                 = 18
+-- StateWifiFirmwareType               = 19
+-- GetPowerType                        = 20
+-- SetPowerType                        = 21
+-- StatePowerType                      = 22
+-- GetLabelType                        = 23
+-- SetLabelType                        = 24
+-- StateLabelType                      = 25
+-- GetTagsType                         = 26
+-- SetTagsType                         = 27
+-- StateTagsType                       = 28
+-- GetTagLabelsType                    = 29
+-- SetTagLabelsType                    = 30
+-- StateTagLabelsType                  = 31
+-- GetVersionType                      = 32
+-- StateVersionType                    = 33
+-- GetInfoType                         = 34
+-- StateInfoType                       = 35
+-- GetMcuRailVoltageType               = 36
+-- StateMcuRailVoltageType             = 37
+-- SetRebootType                       = 38
+-- SetFactoryTestModeType              = 39
+-- DisableFactoryTestModeType          = 40
+-- StateFactoryTestModeType            = 41
+-- StateSiteType                       = 42
+-- StateRebootType                     = 43
+-- SetPanGatewayType                   = 44
+-- AcknowledgementType                 = 45
+-- SetFactoryResetType                 = 46
+-- StateFactoryResetType               = 47
+-- GetLocationType                     = 48
+-- SetLocationType                     = 49
+-- StateLocationType                   = 50
+-- GetGroupType                        = 51
+-- SetGroupType                        = 52
+-- StateGroupType                      = 53
+-- GetOwnerType                        = 54
+-- SetOwnerType                        = 55
+-- StateOwnerType                      = 56
+-- GetFactoryTestModeType              = 57
+-- EchoRequestType                     = 58
+-- EchoResponseType                    = 59
+-- LightGetType                        = 101
+-- LightSetColorType                   = 102
+-- LightSetWaveformType                = 103
+-- LightSetDimAbsoluteType             = 104
+-- LightSetDimRelativeType             = 105
+-- LightSetRgbwType                    = 106
+-- LightStateType                      = 107
+-- LightGetRailVoltageType             = 108
+-- LightStateRailVoltageType           = 109
+-- LightGetTemperatureType             = 110
+-- LightStateTemperatureType           = 111
+-- LightSetCalibrationCoefficientsType = 112
+-- LightSetSimpleEventType             = 113
+-- LightGetSimpleEventType             = 114
+-- LightStateSimpleEventType           = 115
+-- LightGetPowerType                   = 116
+-- LightSetPowerType                   = 117
+-- LightStatePowerType                 = 118
+-- LightSetWaveformOptionalType        = 119
+-- WanGetType                          = 201
+-- WanSetType                          = 202
+-- WanStateType                        = 203
+-- WanGetAuthKeyType                   = 204
+-- WanSetAuthKeyType                   = 205
+-- WanStateAuthKeyType                 = 206
+-- WanSetKeepAliveType                 = 207
+-- WanStateKeepAliveType               = 208
+-- WanSetHostType                      = 209
+-- WanGetHostType                      = 210
+-- WanStateHostType                    = 211
+-- WifiGetType                         = 301
+-- WifiSetType                         = 302
+-- WifiStateType                       = 303
+-- WifiGetAccessPointsType             = 304
+-- WifiSetAccessPointType              = 305
+-- WifiStateAccessPointsType           = 306
+-- WifiGetAccessPointType              = 307
+-- WifiStateAccessPointType            = 308
+-- WifiSetAccessPointBroadcastType     = 309
+-- SensorGetAmbientLightType           = 401
+-- SensorStateAmbientLightType         = 402
+-- SensorGetDimmerVoltageType          = 403
+-- SensorStateDimmerVoltageType        = 404
