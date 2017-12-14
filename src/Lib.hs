@@ -177,54 +177,6 @@ getCurrentLifxUTC
   = (LifxUTC . floor . (* 1000000000) . utcTimeToPOSIXSeconds) <$> getCurrentTime
 
 
-mkFrame
-  :: WithSize a
-  => Packet a
-  -> Tagged
-  -> UniqueSource
-  -> Frame
-mkFrame par tag
-  = Frame (size par) 0 tag HasFrameAddress 1024
-
-mkFrameAddress
-  :: Target
-  -> AckRequired
-  -> ResRequired
-  -> Sequence
-  -> FrameAddress
-mkFrameAddress tar
-  = FrameAddress tar (UnusedMac $ Mac ((), (), (), (), (), ())) ()
-
-mkProtocolHeader
-  :: MessageType
-  -> ProtocolHeader
-mkProtocolHeader typ
-  = ProtocolHeader 0 (Request typ) ()
-
-mkPacket
-  :: ( WithSize a
-     , Binary a
-     )
-  => Tagged
-  -> UniqueSource
-  -> Target
-  -> AckRequired
-  -> ResRequired
-  -> Sequence
-  -> MessageType
-  -> a
-  -> Packet a
-mkPacket tag src tar ack res sequ typ pay
-  =
-  let
-    f = mkFrame p tag src
-    fa = mkFrameAddress tar ack res sequ
-    ph = mkProtocolHeader typ
-    -- Only make a refernce to `p` here to "tie the knot" since mkFrame needs the `p` size
-    p = Packet f fa ph pay
-  in
-    p
-
 serviceUDP
   :: Word8
 serviceUDP
@@ -257,11 +209,11 @@ serviceUDP
 
 
 
-
 uniqueSource
   :: UniqueSource
 uniqueSource
   = UniqueSource 1234
+
 
 receiveThread
   :: SharedState
@@ -583,50 +535,6 @@ outerGet ss d pay cb
   sendToDevice ss d np
 
 
-newDiscoveryPacket
-  :: SharedState
-  -> (SharedState -> Packet StateService -> SockAddr -> BSL.ByteString -> IO ())
-  -> IO (Packet GetService)
-newDiscoveryPacket ss@SharedState {..} runCb
-  = do
-  pp <- newPacket ss runCb
-    $ \p@Packet {..} ->
-      let
-        f = pFrame
-        pFrame' = f { fTagged = AllTagged }
-      in
-        p { pFrame = pFrame' }
-  pure $ pp GetService
-
-newPacket'
-  :: forall a
-   . ( MessageIdC a )
-  => SharedState
-  -> (SharedState -> Packet (StateReply a) -> SockAddr -> BSL.ByteString -> IO ())
-  -> IO (a -> Packet a)
-newPacket' ss@SharedState {..} runCb
-  = newPacket ss runCb id
-
-newPacket
-  :: forall a
-   . ( MessageIdC a )
-  => SharedState
-  -> (SharedState -> Packet (StateReply a) -> SockAddr -> BSL.ByteString -> IO ())
-  -> (Packet a -> Packet a)
-  -> IO (a -> Packet a)
-newPacket ss@SharedState {..} runCb modify
-  = do
-  nextSeq <- ssNextSeq
-  setCallbackForSeq ss nextSeq $ CallbackWrap decodePacket runCb
-  pure $ modify . mkPacket
-    SingleTagged
-    uniqueSource
-    (word64leToTarget 0)
-    NoAckRequired
-    NoResRequired
-    nextSeq
-    (msgTypP (Proxy :: Proxy a))
-
 
 socketAddrToDeviceSocketAddr
   :: SockAddr
@@ -648,17 +556,6 @@ discoveryThread ss@SharedState {..} bcast
     bcast
     gsp
   threadDelay $ 10 * 1000000
-
-setCallbackForSeq
-  :: ( MonadIO m )
-  => SharedState
-  -> Sequence
-  -> CallbackWrap
-  -> m ()
-setCallbackForSeq SharedState {..} sequ cont
-  = liftIO
-  $ atomically
-  $ writeArray ssReplyCallbacks (unSequence sequ) cont
 
 toLogLevel
   :: String
@@ -710,52 +607,6 @@ mkState
   pure $ AppState sharedState asReceiveThread asDiscoveryThread
 
 
-mkTestFrame
-  :: WithSize a
-  => Packet a
-  -> Tagged
-  -> UniqueSource
-  -> Frame
-mkTestFrame par tag
-  = Frame (size par) 0 tag HasFrameAddress 1024
-
-mkTestFrameAddress
-  :: Target
-  -> AckRequired
-  -> ResRequired
-  -> Sequence
-  -> FrameAddress
-mkTestFrameAddress tar
-  = FrameAddress tar (UnusedMac $ Mac ((), (), (), (), (), ())) ()
-
-mkTestProtocolHeader
-  :: Direction
-  -> ProtocolHeader
-mkTestProtocolHeader typ
-  = ProtocolHeader 0 typ ()
-
-mkTestPacket
-  :: ( WithSize a
-     , Binary a
-     )
-  => Tagged
-  -> UniqueSource
-  -> Target
-  -> AckRequired
-  -> ResRequired
-  -> Sequence
-  -> Direction
-  -> a
-  -> Packet a
-mkTestPacket tag src tar ack res sequ typ pay
-  =
-  let
-    f = mkTestFrame p tag src
-    fa = mkTestFrameAddress tar ack res sequ
-    ph = mkTestProtocolHeader typ
-    p = Packet f fa ph pay
-  in
-    p
 
 
 

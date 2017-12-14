@@ -563,7 +563,7 @@ lightReceiveThread nic ss bulbM
       print @String $ replicate100 '*'
 
     preamble uniqS nicToTarget sequ
-      = mkTestPacket
+      = mkPacket
       SingleTagged
       uniqS
       nicToTarget

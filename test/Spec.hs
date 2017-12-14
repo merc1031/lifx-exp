@@ -38,7 +38,9 @@ import qualified  Data.Binary                     as Bin
 import qualified  Data.ByteString.Base16.Lazy     as BSL16
 
 import            Lib
+import            Home.Lights.LIFX.Transport
 import            Home.Lights.LIFX.Types
+
 
 instance Arbitrary Direction where
   arbitrary
@@ -192,7 +194,7 @@ mkTestDiscoveryPacket
   :: Sequence
   -> Packet GetService
 mkTestDiscoveryPacket nextSeq
-  = mkPacket
+  = mkRequestPacket
   AllTagged
   uniqueSource
   (word64leToTarget 0)

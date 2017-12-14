@@ -19,11 +19,14 @@
 
 module Home.Lights.LIFX.Transport where
 
+import            Control.Concurrent.STM
 import            Control.Monad                 ( when )
 import            Control.Monad.Except
 import            Control.Monad.Trans.Except
+import            Data.Array.MArray             ( writeArray )
 import            Data.Binary                   ( Binary (..) )
 import            Data.Maybe                    ( isJust )
+import            Data.Proxy
 import            Network.Socket                ( Socket (..)
                                                 , SockAddr (..)
                                                 )
@@ -114,3 +117,133 @@ decodePacket hdr rema
     throwE $ PayloadDecodeFailed hdr rema str offset err
   Right (_, _, payload) ->
     pure $ packetFromHeader hdr payload
+
+
+mkFrame
+  :: WithSize a
+  => Packet a
+  -> Tagged
+  -> UniqueSource
+  -> Frame
+mkFrame par tag
+  = Frame (size par) 0 tag HasFrameAddress 1024
+
+mkFrameAddress
+  :: Target
+  -> AckRequired
+  -> ResRequired
+  -> Sequence
+  -> FrameAddress
+mkFrameAddress tar
+  = FrameAddress tar (UnusedMac $ Mac ((), (), (), (), (), ())) ()
+
+mkProtocolHeader
+  :: Direction
+  -> ProtocolHeader
+mkProtocolHeader typ
+  = ProtocolHeader 0 typ ()
+
+mkRequestPacket
+  :: ( WithSize a
+     , Binary a
+     )
+  => Tagged
+  -> UniqueSource
+  -> Target
+  -> AckRequired
+  -> ResRequired
+  -> Sequence
+  -> MessageType
+  -> a
+  -> Packet a
+mkRequestPacket tag src tar ack res sequ typ pay
+  =
+  let
+    f = mkFrame p tag src
+    fa = mkFrameAddress tar ack res sequ
+    ph = mkProtocolHeader (Request typ)
+    -- Only make a refernce to `p` here to "tie the knot" since mkFrame needs the `p` size
+    p = Packet f fa ph pay
+  in
+    p
+
+mkPacket
+  :: ( WithSize a
+     , Binary a
+     )
+  => Tagged
+  -> UniqueSource
+  -> Target
+  -> AckRequired
+  -> ResRequired
+  -> Sequence
+  -> Direction
+  -> a
+  -> Packet a
+mkPacket tag src tar ack res sequ typ pay
+  =
+  let
+    f = mkFrame p tag src
+    fa = mkFrameAddress tar ack res sequ
+    ph = mkProtocolHeader typ
+    p = Packet f fa ph pay
+  in
+    p
+
+
+setCallbackForSeq
+  :: ( MonadIO m )
+  => SharedState
+  -> Sequence
+  -> CallbackWrap
+  -> m ()
+setCallbackForSeq SharedState {..} sequ cont
+  = liftIO
+  $ atomically
+  $ writeArray ssReplyCallbacks (unSequence sequ) cont
+
+
+newDiscoveryPacket
+  :: SharedState
+  -> (SharedState -> Packet StateService -> SockAddr -> BSL.ByteString -> IO ())
+  -> IO (Packet GetService)
+newDiscoveryPacket ss@SharedState {..} runCb
+  = do
+  pp <- newPacket ss runCb
+    $ \p@Packet {..} ->
+      let
+        f = pFrame
+        pFrame' = f { fTagged = AllTagged }
+      in
+        p { pFrame = pFrame' }
+  pure $ pp GetService
+
+newPacket'
+  :: forall a
+   . ( MessageIdC a )
+  => SharedState
+  -> (SharedState -> Packet (StateReply a) -> SockAddr -> BSL.ByteString -> IO ())
+  -> IO (a -> Packet a)
+newPacket' ss@SharedState {..} runCb
+  = newPacket ss runCb id
+
+newPacket
+  :: forall a
+   . ( MessageIdC a )
+  => SharedState
+  -> (SharedState -> Packet (StateReply a) -> SockAddr -> BSL.ByteString -> IO ())
+  -> (Packet a -> Packet a)
+  -> IO (a -> Packet a)
+newPacket ss@SharedState {..} runCb modify
+  = do
+  nextSeq <- ssNextSeq
+  setCallbackForSeq ss nextSeq $ CallbackWrap decodePacket runCb
+  pure $ modify . mkRequestPacket
+    SingleTagged
+    ssUniqueSource
+    (word64leToTarget 0)
+    NoAckRequired
+    NoResRequired
+    nextSeq
+    (msgTypP (Proxy :: Proxy a))
+
