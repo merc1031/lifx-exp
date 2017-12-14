@@ -79,7 +79,7 @@ import qualified  Data.Text.Lazy                as TL
 import qualified  Data.Text.Lazy.Encoding       as TLE
 
 
-class MessageId a where
+class (Binary a, WithSize a, Binary (StateReply a), WithSize (StateReply a)) => MessageId a where
   type StateReply a
 
   msgId :: a -> Word16le

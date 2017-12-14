@@ -2,6 +2,7 @@
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DeriveGeneric   #-}
+{-# LANGUAGE ExistentialQuantification   #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE OverloadedStrings #-}
@@ -76,10 +77,27 @@ type OnLifxState a
       , BSL.ByteString
       )
 
+
 class MessageId a => OnLifx a where
   onReq
     :: Proxy a
     -> ReaderT (OnLifxState a) IO (Either MorphedError ShouldRespond)
+
+
+data SomePayload
+  = forall a. (OnLifx a, MessageId a) => SomePayload (Proxy a)
+
+
+directionToSomePayload
+  :: Direction
+  -> SomePayload
+directionToSomePayload
+  = \case
+  Request (DeviceMessageType x) -> deviceMessagetoSomePayload x
+  where
+    deviceMessagetoSomePayload
+      = \case
+      GetServiceMessage -> SomePayload $ Proxy @GetService
 
 
 instance OnLifx GetService where
@@ -617,7 +635,9 @@ lightReceiveThread nic ss bulbM
 
     case msgT of
       (Request (DeviceMessageType GetServiceMessage)) ->
-        flip runReaderT (bulbM, pp, decodedHeader, rest) $ onReq (Proxy :: Proxy GetService)
+        case directionToSomePayload msgT of
+          SomePayload p ->
+            flip runReaderT (bulbM, pp, decodedHeader, rest) $ onReq p
       (Request (DeviceMessageType GetHostFirmwareMessage)) ->
         flip runReaderT (bulbM, pp, decodedHeader, rest) $ onReq (Proxy :: Proxy GetHostFirmware)
       (Request (DeviceMessageType GetWifiFirmwareMessage)) ->
