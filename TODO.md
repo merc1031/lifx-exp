@@ -18,3 +18,6 @@ How do I want to do effects?
   "KeyFrames"
 
 
+Do I need Get* ?
+  all of them basically just encode decode to () and are used for inference
+  perhaps symbols can just work @"GetService"

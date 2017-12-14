@@ -459,6 +459,9 @@ instance NFData ReplyType where
   rnf
     = genericRnfV1
 
+--type family PayloadIdToPayload p = r | r -> p where
+--  PayloadIdToPayload (Request (DeviceMessageType 
+
 
 data DeviceMessage
   = GetServiceMessage
@@ -1024,6 +1027,12 @@ instance Binary SetInfrared where
 instance WithSize SetInfrared where
   size
     = const 2
+
+
+instance MessageId SetInfrared where
+  type StateReply SetInfrared = StateInfrared
+  msgId = const 122
+  msgTyp = const $ LightMessageType SetInfraredMessage
 
 
 data GetLabel
@@ -1657,6 +1666,12 @@ instance Binary SetLabel where
 instance WithSize SetLabel where
   size
     = const 32
+
+
+instance MessageId SetLabel where
+  type StateReply SetLabel = StateLabel
+  msgId = const 24
+  msgTyp = const $ DeviceMessageType SetLabelMessage
 
 
 data State

@@ -32,6 +32,7 @@ import            Control.Exception
 import            Control.Lens.Reified
 import            Control.Monad
 import            Data.Default
+import            Data.Proxy
 import            Data.Semigroup              ( (<>) )
 import            Data.String                 ( IsString (..) )
 import            Data.Word
@@ -64,6 +65,460 @@ import qualified  Network.Info                as  NI
 import            Lib
 import            Home.Lights.LIFX.Transport
 import            Home.Lights.LIFX.Types
+
+
+class MessageId a => OnLifx a where
+  onReq
+    :: Proxy a
+    -> TVar FakeBulb
+    -> (Direction -> StateReply a -> Packet (StateReply a))
+    -> Header
+    -> BSL.ByteString
+    -> IO (Either MorphedError ShouldRespond)
+
+
+instance OnLifx GetService where
+  onReq _ _bulbM pp decodedHeader rest
+    = do
+    let
+      payloadE
+        = runExcept
+        $ withExcept MorphedPayloadError
+        $ decodePacket @GetService decodedHeader rest
+
+    forM payloadE $ \_payload -> do
+
+      let
+        packet
+          = pp
+          (Reply $ DeviceReplyType StateServiceReply)
+          (StateService 1 56700)
+
+      pure $ YesResponse (stream packet)
+
+
+instance OnLifx GetHostFirmware where
+  onReq _ bulbM pp decodedHeader rest
+    = do
+    let
+      payloadE
+        = runExcept
+        $ withExcept MorphedPayloadError
+        $ decodePacket @GetHostFirmware decodedHeader rest
+
+    forM payloadE $ \_payload -> do
+      FakeBulbFirmware {..}
+        <- atomically
+            $ fbFirmware
+          <$> readTVar bulbM
+
+      let
+        packet
+          = pp
+          (Reply $ DeviceReplyType StateHostFirmwareReply)
+          (StateHostFirmware fbfBuild 0 fbfVersion)
+
+      pure $ YesResponse (stream packet)
+
+
+instance OnLifx GetWifiFirmware where
+  onReq _ bulbM pp decodedHeader rest
+    = do
+    let
+      payloadE
+        = runExcept
+        $ withExcept MorphedPayloadError
+        $ decodePacket @GetWifiFirmware decodedHeader rest
+
+    forM payloadE $ \_payload -> do
+      FakeBulbWifiFirmware {..}
+        <- atomically
+            $ fbWifiFirmware
+          <$> readTVar bulbM
+
+      let
+        packet
+          = pp
+          (Reply $ DeviceReplyType StateWifiFirmwareReply)
+          (StateWifiFirmware fbwfBuild 0 fbwfVersion)
+
+      pure $ YesResponse (stream packet)
+
+
+instance OnLifx GetWifiInfo where
+  onReq _ bulbM pp decodedHeader rest
+    = do
+    let
+      payloadE
+        = runExcept
+        $ withExcept MorphedPayloadError
+        $ decodePacket @GetWifiInfo decodedHeader rest
+
+    forM payloadE $ \_payload -> do
+      FakeBulbWifiInfo {..}
+        <- atomically
+            $ fbWifiInfo
+          <$> readTVar bulbM
+
+      let
+        packet
+          = pp
+          (Reply $ DeviceReplyType StateWifiInfoReply)
+          (StateWifiInfo fbwiSignal fbwiTx fbwiRx 0)
+
+      pure $ YesResponse (stream packet)
+
+
+instance OnLifx GetLight where
+  onReq _ bulbM pp decodedHeader rest
+    = do
+    let
+      payloadE
+        = runExcept
+        $ withExcept MorphedPayloadError
+        $ decodePacket @GetLight decodedHeader rest
+
+    forM payloadE $ \_payload -> do
+      (FakeBulbState {..}, label)
+        <- atomically
+            $ (fbState &&& (^. typed @(Label "name")))
+          <$> readTVar bulbM
+
+      let
+        packet
+          = pp
+          (Reply $ LightReplyType StateLightReply)
+          (StateLight fbsColor 0 fbsLightPowerLevel label 0)
+
+      pure $ YesResponse (stream packet)
+
+
+instance OnLifx GetVersion where
+  onReq _ bulbM pp decodedHeader rest
+    = do
+        let
+          payloadE
+            = runExcept
+            $ withExcept MorphedPayloadError
+            $ decodePacket @GetVersion decodedHeader rest
+
+        forM payloadE $ \_payload -> do
+          FakeBulbVersion {..}
+            <- atomically
+                $ fbVersion
+              <$> readTVar bulbM
+
+          let
+            packet
+              = pp
+              (Reply $ DeviceReplyType StateVersionReply)
+              (StateVersion def fbvProduct $ HardwareVersion 0)
+
+          pure $ YesResponse (stream packet)
+
+
+instance OnLifx GetLocation where
+  onReq _ bulbM pp decodedHeader rest
+    = do
+    let
+      payloadE
+        = runExcept
+        $ withExcept MorphedPayloadError
+        $ decodePacket @GetLocation decodedHeader rest
+
+    forM payloadE $ \_payload -> do
+      t <- getCurrentLifxUTC
+      FakeBulbLocation {..}
+        <- atomically
+            $ fbLocation
+          <$> readTVar bulbM
+
+      let
+        packet
+          = pp
+          (Reply $ DeviceReplyType StateLocationReply)
+          (StateLocation fblLocationId fblLabel t)
+
+      pure $ YesResponse (stream packet)
+
+
+instance OnLifx GetGroup where
+  onReq _ bulbM pp decodedHeader rest
+    = do
+    let
+      payloadE
+        = runExcept
+        $ withExcept MorphedPayloadError
+        $ decodePacket @GetGroup decodedHeader rest
+
+    forM payloadE $ \_payload -> do
+      t <- getCurrentLifxUTC
+      FakeBulbGroup {..}
+        <- atomically
+            $ fbGroup
+          <$> readTVar bulbM
+
+      let
+        packet
+          = pp
+          (Reply $ DeviceReplyType StateGroupReply)
+          (StateGroup fbgGroupId fbgLabel t)
+
+      pure $ YesResponse (stream packet)
+
+
+instance OnLifx SetLabel where
+  onReq _ bulbM pp decodedHeader rest
+    = do
+    let
+      payloadE
+        = runExcept
+        $ withExcept MorphedPayloadError
+        $ decodePacket @SetLabel decodedHeader rest
+
+    forM payloadE $ \Packet { pPayload } -> do
+      print $ "Told to set label to " <> show pPayload
+
+      label
+        <- atomically $ do
+          modifyTVar'
+            bulbM
+            (& typed @(Label "name") .~ (selLabel pPayload))
+          fbLabel <$> readTVar bulbM
+
+
+      let
+        packet
+          = pp
+          (Reply $ DeviceReplyType StateLabelReply)
+          (StateLabel label)
+
+      pure $ shouldRespond decodedHeader (stream packet)
+
+
+instance OnLifx SetColor where
+  onReq _ bulbM pp decodedHeader rest
+    = do
+    let
+      payloadE
+        = runExcept
+        $ withExcept MorphedPayloadError
+        $ decodePacket @SetColor decodedHeader rest
+
+    forM payloadE $ \p@(Packet { pPayload = SetColor {..} }) -> do
+      printBanner "Set Color Payload " (pPayload p)
+
+      -- Should really spion off a thread to handle the duration aspect of chaning color...
+      (FakeBulbState {..}, label)
+        <- atomically $ do
+          modifyTVar'
+            bulbM
+            (& typed @FakeBulbState . typed @HSBK .~ secColor)
+
+          (fbState &&& (^. typed @(Label "name")))
+            <$> readTVar bulbM
+
+      let
+        packet
+          = pp
+          (Reply $ LightReplyType StateLightReply)
+          (StateLight fbsColor 0 fbsLightPowerLevel label 0)
+
+      pure $ shouldRespond decodedHeader (stream packet)
+
+
+instance OnLifx SetLightPower where
+  onReq _ bulbM pp decodedHeader rest
+    = do
+    let
+      payloadE
+        = runExcept
+        $ withExcept MorphedPayloadError
+        $ decodePacket @SetLightPower decodedHeader rest
+
+    forM payloadE $ \Packet { pPayload = SetLightPower {..} } -> do
+
+      -- If there is a previous power thread kill it (TODO maybe use a channel and a persistent thread)
+      (powerThreadV, powerThread)
+        <- atomically $ do
+          pVar <- fbPowerThread <$> readTVar bulbM
+          (pVar, ) <$> readTVar pVar
+
+      forM_ powerThread cancel
+
+      LightPower lightPowerLevel
+        <- atomically
+            $ fbsLightPowerLevel
+            . fbState
+          <$> readTVar bulbM
+
+      start <- POSIX.getPOSIXTime
+
+      pThread <- async $ do
+
+        let
+          end
+            = floor start + selpDuration
+          loop
+            = do
+            threadDelay
+              $ floor @Double
+              $ 2 * ((1 * 1000000) / fromIntegral maxMessagesPerSecond) -- Only use 1/2 of our message allotment by sleeping 2 times as long
+            now <- POSIX.getPOSIXTime
+
+            let
+              percentage
+                = (now - start) / (fromIntegral end - start)
+              smear
+                = lightPowerLevel + ((unLightPower selpLevel - lightPowerLevel) * floor percentage)
+
+            atomically
+              $ modifyTVar'
+                  bulbM
+                  (& typed @FakeBulbState . typed @LightPower .~ LightPower smear)
+            -- start = 10     end = 40      now = 20
+            --         20           80
+            when (floor now < end)
+              loop
+        -- | Start the loop
+        loop
+
+      atomically
+        $ modifyTVar' powerThreadV
+        (const $ Just pThread)
+
+      let
+        packet
+          = pp
+          (Reply $ LightReplyType StateLightPowerReply)
+          (StateLightPower $ LightPower lightPowerLevel)
+
+      pure $ shouldRespond decodedHeader (stream packet)
+
+
+instance OnLifx SetInfrared where
+  onReq _ bulbM pp decodedHeader rest
+    = do
+    let
+      payloadE
+        = runExcept
+        $ withExcept MorphedPayloadError
+        $ decodePacket @SetInfrared decodedHeader rest
+
+    forM payloadE $ \Packet { pPayload } -> do
+      infraredBrightness
+        <- atomically $ do
+          modifyTVar'
+            bulbM
+            (& typed @FakeBulbState . typed @Word16le .~ seiBrightness pPayload)
+          fbsInfraredBrightness . fbState <$> readTVar bulbM
+
+      let
+        packet
+          = pp
+          (Reply $ LightReplyType StateInfraredReply)
+          (StateInfrared infraredBrightness)
+
+      pure $ shouldRespond decodedHeader (stream packet)
+
+
+instance OnLifx SetWaveform where
+  onReq _ bulbM pp decodedHeader rest
+    = do
+    let
+      payloadE
+        = runExcept
+        $ withExcept MorphedPayloadError
+        $ decodePacket @SetWaveform decodedHeader rest
+
+    forM payloadE $ \p@(Packet { pPayload = SetWaveform {..} }) -> do
+      printBanner "Set Waveform Payload " (pPayload p)
+
+      (FakeBulbState {..}, label)
+        <- atomically
+            $ (fbState &&& (^. typed @(Label "name")))
+          <$> readTVar bulbM
+
+      let
+        packet
+          = pp
+          (Reply $ LightReplyType StateLightReply)
+          (StateLight fbsColor 0 fbsLightPowerLevel label 0)
+
+      print packet
+      pure $ YesResponse (stream packet)
+
+
+instance OnLifx SetWaveformOptional where
+  onReq _ bulbM pp decodedHeader rest
+    = do
+    let
+      payloadE
+        = runExcept
+        $ withExcept MorphedPayloadError
+        $ decodePacket @SetWaveformOptional decodedHeader rest
+
+    forM payloadE $ \p@(Packet { pPayload = SetWaveformOptional {..} }) -> do
+      printBanner "Set Waveform Optional Payload " (pPayload p)
+
+      (FakeBulbState {..}, label)
+        <- atomically
+--              $ (fbState &&& (^. typed @(Label "name")))  -- | Simple arrow
+--                $ ((. field @"fbState") &&& (^. typed @(Label "name")))  -- | Arrowed full lens
+            $ (^. (runGetter $ (,) <$> Getter (field @"fbState") <*>  Getter (typed @(Label "name"))))  -- | General lens composition
+          <$> readTVar bulbM
+
+      let
+        packet
+          = pp
+          (Reply $ LightReplyType StateLightReply)
+          (StateLight fbsColor 0 fbsLightPowerLevel label 0)
+
+      print packet
+      pure $ YesResponse (stream packet)
+
+
+instance OnLifx GetUnknown54 where
+  onReq _ _bulbM pp decodedHeader rest
+    = do
+    let
+      payloadE
+        = runExcept
+        $ withExcept MorphedPayloadError
+        $ decodePacket @GetUnknown54 decodedHeader rest
+
+    forM payloadE $ \_payload -> do
+      t <- getCurrentLifxUTC
+
+      let
+        _packet
+          = pp
+          (Reply $ DeviceReplyType StateUnknown54Reply)
+          (StateUnknown54 def (Label "") t)
+
+      pure $ NoResponse
+
+
+stream
+  :: Binary a
+  => Packet a
+  -> [BS.ByteString]
+stream
+  = BSL.toChunks
+  . Bin.encode
+
+
+printBanner
+  :: Show a
+  => String
+  -> a
+  -> IO ()
+printBanner msg p
+  = do
+  print @String $ replicate100 '*'
+  print $ msg <> show p
+  print @String $ replicate100 '*'
+
 
 lightReceiveThread
   :: NI.NetworkInterface
@@ -120,13 +575,6 @@ lightReceiveThread nic ss bulbM
         uniqS
         nicToTarget
         sequ
-      stream
-        :: Binary a
-        => Packet a
-        -> [BS.ByteString]
-      stream
-        = BSL.toChunks
-        . Bin.encode
 
     -- | Acknowledge when required
     when (ackR == AckRequired) $ do
@@ -148,383 +596,36 @@ lightReceiveThread nic ss bulbM
       <> show resR
 
     case msgT of
-      (Request (DeviceMessageType GetServiceMessage)) -> do
-
-        let
-          payloadE
-            = runExcept
-            $ withExcept MorphedPayloadError
-            $ decodePacket @GetService decodedHeader rest
-
-        forM payloadE $ \_payload -> do
-
-          let
-            packet
-              = pp
-              (Reply $ DeviceReplyType StateServiceReply)
-              (StateService 1 56700)
-
-          pure $ YesResponse (stream packet)
-      (Request (DeviceMessageType GetHostFirmwareMessage)) -> do
-
-        let
-          payloadE
-            = runExcept
-            $ withExcept MorphedPayloadError
-            $ decodePacket @GetHostFirmware decodedHeader rest
-
-        forM payloadE $ \_payload -> do
-          FakeBulbFirmware {..}
-            <- atomically
-                $ fbFirmware
-              <$> readTVar bulbM
-
-          let
-            packet
-              = pp
-              (Reply $ DeviceReplyType StateHostFirmwareReply)
-              (StateHostFirmware fbfBuild 0 fbfVersion)
-
-          pure $ YesResponse (stream packet)
-      (Request (DeviceMessageType GetWifiFirmwareMessage)) -> do
-
-        let
-          payloadE
-            = runExcept
-            $ withExcept MorphedPayloadError
-            $ decodePacket @GetWifiFirmware decodedHeader rest
-
-        forM payloadE $ \_payload -> do
-          FakeBulbWifiFirmware {..}
-            <- atomically
-                $ fbWifiFirmware
-              <$> readTVar bulbM
-
-          let
-            packet
-              = pp
-              (Reply $ DeviceReplyType StateWifiFirmwareReply)
-              (StateWifiFirmware fbwfBuild 0 fbwfVersion)
-
-          pure $ YesResponse (stream packet)
-      (Request (DeviceMessageType GetWifiInfoMessage)) -> do
-
-        let
-          payloadE
-            = runExcept
-            $ withExcept MorphedPayloadError
-            $ decodePacket @GetWifiInfo decodedHeader rest
-
-        forM payloadE $ \_payload -> do
-          FakeBulbWifiInfo {..}
-            <- atomically
-                $ fbWifiInfo
-              <$> readTVar bulbM
-
-          let
-            packet
-              = pp
-              (Reply $ DeviceReplyType StateWifiInfoReply)
-              (StateWifiInfo fbwiSignal fbwiTx fbwiRx 0)
-
-          pure $ YesResponse (stream packet)
-      (Request (LightMessageType GetLightMessage)) -> do
-
-        let
-          payloadE
-            = runExcept
-            $ withExcept MorphedPayloadError
-            $ decodePacket @GetLight decodedHeader rest
-
-        forM payloadE $ \_payload -> do
-          (FakeBulbState {..}, label)
-            <- atomically
-                $ (fbState &&& (^. typed @(Label "name")))
-              <$> readTVar bulbM
-
-          let
-            packet
-              = pp
-              (Reply $ LightReplyType StateLightReply)
-              (StateLight fbsColor 0 fbsLightPowerLevel label 0)
-
-          pure $ YesResponse (stream packet)
+      (Request (DeviceMessageType GetServiceMessage)) ->
+        onReq (Proxy :: Proxy GetService) bulbM pp decodedHeader rest
+      (Request (DeviceMessageType GetHostFirmwareMessage)) ->
+        onReq (Proxy :: Proxy GetHostFirmware) bulbM pp decodedHeader rest
+      (Request (DeviceMessageType GetWifiFirmwareMessage)) ->
+        onReq (Proxy :: Proxy GetWifiFirmware) bulbM pp decodedHeader rest
+      (Request (DeviceMessageType GetWifiInfoMessage)) ->
+        onReq (Proxy :: Proxy GetWifiInfo) bulbM pp decodedHeader rest
+      (Request (LightMessageType GetLightMessage)) ->
+        onReq (Proxy :: Proxy GetLight) bulbM pp decodedHeader rest
       (Request (DeviceMessageType GetVersionMessage)) -> do
-
-        let
-          payloadE
-            = runExcept
-            $ withExcept MorphedPayloadError
-            $ decodePacket @GetVersion decodedHeader rest
-
-        forM payloadE $ \_payload -> do
-          FakeBulbVersion {..}
-            <- atomically
-                $ fbVersion
-              <$> readTVar bulbM
-
-          let
-            packet
-              = pp
-              (Reply $ DeviceReplyType StateVersionReply)
-              (StateVersion def fbvProduct $ HardwareVersion 0)
-
-          pure $ YesResponse (stream packet)
+        onReq (Proxy :: Proxy GetVersion) bulbM pp decodedHeader rest
       (Request (DeviceMessageType GetLocationMessage)) -> do
-
-        let
-          payloadE
-            = runExcept
-            $ withExcept MorphedPayloadError
-            $ decodePacket @GetLocation decodedHeader rest
-
-        forM payloadE $ \_payload -> do
-          t <- getCurrentLifxUTC
-          FakeBulbLocation {..}
-            <- atomically
-                $ fbLocation
-              <$> readTVar bulbM
-
-          let
-            packet
-              = pp
-              (Reply $ DeviceReplyType StateLocationReply)
-              (StateLocation fblLocationId fblLabel t)
-
-          pure $ YesResponse (stream packet)
+        onReq (Proxy :: Proxy GetLocation) bulbM pp decodedHeader rest
       (Request (DeviceMessageType GetGroupMessage)) -> do
-
-        let
-          payloadE
-            = runExcept
-            $ withExcept MorphedPayloadError
-            $ decodePacket @GetGroup decodedHeader rest
-
-        forM payloadE $ \_payload -> do
-          t <- getCurrentLifxUTC
-          FakeBulbGroup {..}
-            <- atomically
-                $ fbGroup
-              <$> readTVar bulbM
-
-          let
-            packet
-              = pp
-              (Reply $ DeviceReplyType StateGroupReply)
-              (StateGroup fbgGroupId fbgLabel t)
-
-          pure $ YesResponse (stream packet)
+        onReq (Proxy :: Proxy GetGroup) bulbM pp decodedHeader rest
       (Request (DeviceMessageType SetLabelMessage)) -> do
-
-        let
-          payloadE
-            = runExcept
-            $ withExcept MorphedPayloadError
-            $ decodePacket @SetLabel decodedHeader rest
-
-        forM payloadE $ \Packet { pPayload } -> do
-          print $ "Told to set label to " <> show pPayload
-
-          label
-            <- atomically $ do
-              modifyTVar'
-                bulbM
-                (& typed @(Label "name") .~ (selLabel pPayload))
-              fbLabel <$> readTVar bulbM
-
-
-          let
-            packet
-              = pp
-              (Reply $ DeviceReplyType StateLabelReply)
-              (StateLabel label)
-
-          pure $ shouldRespond decodedHeader (stream packet)
+        onReq (Proxy :: Proxy SetLabel) bulbM pp decodedHeader rest
       (Request (LightMessageType SetColorMessage)) -> do
-
-        let
-          payloadE
-            = runExcept
-            $ withExcept MorphedPayloadError
-            $ decodePacket @SetColor decodedHeader rest
-
-        forM payloadE $ \p@(Packet { pPayload = SetColor {..} }) -> do
-          printBanner "Set Color Payload " (pPayload p)
-
-          -- Should really spion off a thread to handle the duration aspect of chaning color...
-          (FakeBulbState {..}, label)
-            <- atomically $ do
-              modifyTVar'
-                bulbM
-                (& typed @FakeBulbState . typed @HSBK .~ secColor)
-
-              (fbState &&& (^. typed @(Label "name")))
-                <$> readTVar bulbM
-
-          let
-            packet
-              = pp
-              (Reply $ LightReplyType StateLightReply)
-              (StateLight fbsColor 0 fbsLightPowerLevel label 0)
-
-          pure $ shouldRespond decodedHeader (stream packet)
+        onReq (Proxy :: Proxy SetColor) bulbM pp decodedHeader rest
       (Request (LightMessageType SetLightPowerMessage)) -> do
-
-        let
-          payloadE
-            = runExcept
-            $ withExcept MorphedPayloadError
-            $ decodePacket @SetLightPower decodedHeader rest
-
-        forM payloadE $ \Packet { pPayload = SetLightPower {..} } -> do
-
-          -- If there is a previous power thread kill it (TODO maybe use a channel and a persistent thread)
-          (powerThreadV, powerThread)
-            <- atomically $ do
-              pVar <- fbPowerThread <$> readTVar bulbM
-              (pVar, ) <$> readTVar pVar
-
-          forM_ powerThread cancel
-
-          LightPower lightPowerLevel
-            <- atomically
-                $ fbsLightPowerLevel
-                . fbState
-              <$> readTVar bulbM
-
-          start <- POSIX.getPOSIXTime
-
-          pThread <- async $ do
-
-            let
-              end
-                = floor start + selpDuration
-              loop
-                = do
-                threadDelay
-                  $ floor @Double
-                  $ 2 * ((1 * 1000000) / fromIntegral maxMessagesPerSecond) -- Only use 1/2 of our message allotment by sleeping 2 times as long
-                now <- POSIX.getPOSIXTime
-
-                let
-                  percentage
-                    = (now - start) / (fromIntegral end - start)
-                  smear
-                    = lightPowerLevel + ((unLightPower selpLevel - lightPowerLevel) * floor percentage)
-
-                atomically
-                  $ modifyTVar'
-                      bulbM
-                      (& typed @FakeBulbState . typed @LightPower .~ LightPower smear)
-                -- start = 10     end = 40      now = 20
-                --         20           80
-                when (floor now < end)
-                  loop
-            -- | Start the loop
-            loop
-
-          atomically
-            $ modifyTVar' powerThreadV
-            (const $ Just pThread)
-
-          let
-            packet
-              = pp
-              (Reply $ LightReplyType StateLightPowerReply)
-              (StateLightPower $ LightPower lightPowerLevel)
-
-          pure $ shouldRespond decodedHeader (stream packet)
+        onReq (Proxy :: Proxy SetLightPower) bulbM pp decodedHeader rest
       (Request (LightMessageType SetInfraredMessage)) -> do
-
-        let
-          payloadE
-            = runExcept
-            $ withExcept MorphedPayloadError
-            $ decodePacket @SetInfrared decodedHeader rest
-
-        forM payloadE $ \Packet { pPayload } -> do
-          infraredBrightness
-            <- atomically $ do
-              modifyTVar'
-                bulbM
-                (& typed @FakeBulbState . typed @Word16le .~ seiBrightness pPayload)
-              fbsInfraredBrightness . fbState <$> readTVar bulbM
-
-          let
-            packet
-              = pp
-              (Reply $ LightReplyType StateInfraredReply)
-              (StateInfrared infraredBrightness)
-
-          pure $ shouldRespond decodedHeader (stream packet)
+        onReq (Proxy :: Proxy SetInfrared) bulbM pp decodedHeader rest
       (Request (LightMessageType SetWaveformMessage)) -> do
-
-        let
-          payloadE
-            = runExcept
-            $ withExcept MorphedPayloadError
-            $ decodePacket @SetWaveform decodedHeader rest
-
-        forM payloadE $ \p@(Packet { pPayload = SetWaveform {..} }) -> do
-          printBanner "Set Waveform Payload " (pPayload p)
-
-          (FakeBulbState {..}, label)
-            <- atomically
-                $ (fbState &&& (^. typed @(Label "name")))
-              <$> readTVar bulbM
-
-          let
-            packet
-              = pp
-              (Reply $ LightReplyType StateLightReply)
-              (StateLight fbsColor 0 fbsLightPowerLevel label 0)
-
-          print packet
-          pure $ YesResponse (stream packet)
+        onReq (Proxy :: Proxy SetWaveform) bulbM pp decodedHeader rest
       (Request (LightMessageType SetWaveformOptionalMessage)) -> do
-
-        let
-          payloadE
-            = runExcept
-            $ withExcept MorphedPayloadError
-            $ decodePacket @SetWaveformOptional decodedHeader rest
-
-        forM payloadE $ \p@(Packet { pPayload = SetWaveformOptional {..} }) -> do
-          printBanner "Set Waveform Optional Payload " (pPayload p)
-
-          (FakeBulbState {..}, label)
-            <- atomically
---              $ (fbState &&& (^. typed @(Label "name")))  -- | Simple arrow
---                $ ((. field @"fbState") &&& (^. typed @(Label "name")))  -- | Arrowed full lens
-                $ (^. (runGetter $ (,) <$> Getter (field @"fbState") <*>  Getter (typed @(Label "name"))))  -- | General lens composition
-              <$> readTVar bulbM
-
-          let
-            packet
-              = pp
-              (Reply $ LightReplyType StateLightReply)
-              (StateLight fbsColor 0 fbsLightPowerLevel label 0)
-
-          print packet
-          pure $ YesResponse (stream packet)
+        onReq (Proxy :: Proxy SetWaveformOptional) bulbM pp decodedHeader rest
       (Request (DeviceMessageType GetUnknown54Message)) -> do
-
-        let
-          payloadE
-            = runExcept
-            $ withExcept MorphedPayloadError
-            $ decodePacket @GetUnknown54 decodedHeader rest
-
-        forM payloadE $ \_payload -> do
-          t <- getCurrentLifxUTC
-
-          let
-            _packet
-              = pp
-              (Reply $ DeviceReplyType StateUnknown54Reply)
-              (StateUnknown54 def (Label "") t)
-
-          pure $ NoResponse
+        onReq (Proxy :: Proxy GetUnknown54) bulbM pp decodedHeader rest
       _ -> (Left $ UnknownPacketError "")
         <$ (print $ "Header: " <> show decodedHeader <> " Rest: " <> show rest)
 
@@ -556,12 +657,6 @@ lightReceiveThread nic ss bulbM
           bulbM
           (& typed @FakeBulbWifiInfo . field @"fbwiRx" %~ (+ len))
 
-    printBanner msg p
-      = do
-      print @String $ replicate100 '*'
-      print $ msg <> show p
-      print @String $ replicate100 '*'
-
     preamble uniqS nicToTarget sequ
       = mkPacket
       SingleTagged
@@ -578,10 +673,12 @@ data MorphedError
   | UnknownPacketError !String
   deriving Show
 
+
 data ShouldRespond
   = YesResponse ![BS.ByteString]
   | NoResponse
   deriving Show
+
 
 shouldRespond
   :: Header
@@ -598,6 +695,7 @@ spaces100
   => a
 spaces100
   = replicate100 ' '
+
 
 replicate100
   :: IsString a
@@ -651,6 +749,7 @@ data FakeBulb
   }
   deriving Generic
 
+
 instance Show FakeBulb where
   show FakeBulb {..}
     = "FakeBulb "
@@ -666,6 +765,7 @@ instance Show FakeBulb where
     <> show fbLabel <> " "
     <> show fbStartTime <> " "
     <> "PowerThread"
+
 
 instance Default FakeBulb where
   def
@@ -684,6 +784,7 @@ instance Default FakeBulb where
     , fbPowerThread = undefined
     }
 
+
 data FakeBulbFirmware
   = FakeBulbFirmware
   { fbfBuild   :: !Word64le
@@ -700,6 +801,7 @@ instance Default FakeBulbFirmware where
     , fbfVersion = 131144
     }
 
+
 data FakeBulbWifiInfo
   = FakeBulbWifiInfo
   { fbwiSignal :: !Float32le
@@ -707,6 +809,7 @@ data FakeBulbWifiInfo
   , fbwiRx     :: !Word32le
   }
   deriving (Show, Generic)
+
 
 instance Default FakeBulbWifiInfo where
   def
@@ -716,6 +819,7 @@ instance Default FakeBulbWifiInfo where
     , fbwiRx = 0
     }
 
+
 data FakeBulbWifiFirmware
   = FakeBulbWifiFirmware
   { fbwfBuild   :: !Word64le
@@ -723,12 +827,14 @@ data FakeBulbWifiFirmware
   }
   deriving (Show, Generic)
 
+
 instance Default FakeBulbWifiFirmware where
   def
     = FakeBulbWifiFirmware
     { fbwfBuild = 0
     , fbwfVersion = 0
     }
+
 
 data FakeBulbVersion
   = FakeBulbVersion
@@ -738,6 +844,7 @@ data FakeBulbVersion
   }
   deriving (Show, Generic)
 
+
 instance Default FakeBulbVersion where
   def
     = FakeBulbVersion
@@ -746,12 +853,14 @@ instance Default FakeBulbVersion where
     , fbvVersion = 0
     }
 
+
 data FakeBulbLocation
   = FakeBulbLocation
   { fblLocationId :: !LocationId
   , fblLabel      :: !(Label "location")
   }
   deriving (Show, Generic)
+
 
 instance Default FakeBulbLocation where
   def
@@ -761,12 +870,14 @@ instance Default FakeBulbLocation where
     , fblLabel = Label "Home"
     }
 
+
 data FakeBulbGroup
   = FakeBulbGroup
   { fbgGroupId :: !GroupId
   , fbgLabel   :: !(Label "group")
   }
   deriving (Show, Generic)
+
 
 instance Default FakeBulbGroup where
   def
@@ -776,6 +887,7 @@ instance Default FakeBulbGroup where
     , fbgLabel = Label "Lab"
     }
 
+
 data FakeBulbState
   = FakeBulbState
   { fbsColor              :: !HSBK
@@ -784,6 +896,7 @@ data FakeBulbState
   }
   deriving (Show, Generic)
 
+
 instance Default FakeBulbState where
   def
     = FakeBulbState
@@ -791,6 +904,7 @@ instance Default FakeBulbState where
     , fbsLightPowerLevel = LightPower 0
     , fbsInfraredBrightness = 0
     }
+
 
 fakeBulb
   :: LifxUTC
@@ -819,6 +933,7 @@ fakeBulb t powerThread
   , fbStartTime = t
   , fbPowerThread = powerThread
   }
+
 
 main
   :: IO ()
