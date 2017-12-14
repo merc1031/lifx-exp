@@ -1,3 +1,4 @@
+{-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DeriveGeneric   #-}
@@ -31,6 +32,7 @@ import            Control.Concurrent.STM
 import            Control.Exception
 import            Control.Lens.Reified
 import            Control.Monad
+import            Control.Monad.Trans.Reader
 import            Data.Default
 import            Data.Proxy
 import            Data.Semigroup              ( (<>) )
@@ -67,19 +69,23 @@ import            Home.Lights.LIFX.Transport
 import            Home.Lights.LIFX.Types
 
 
+type OnLifxState a
+    = ( TVar FakeBulb
+      , (Direction -> StateReply a -> Packet (StateReply a))
+      , Header
+      , BSL.ByteString
+      )
+
 class MessageId a => OnLifx a where
   onReq
     :: Proxy a
-    -> TVar FakeBulb
-    -> (Direction -> StateReply a -> Packet (StateReply a))
-    -> Header
-    -> BSL.ByteString
-    -> IO (Either MorphedError ShouldRespond)
+    -> ReaderT (OnLifxState a) IO (Either MorphedError ShouldRespond)
 
 
 instance OnLifx GetService where
-  onReq _ _bulbM pp decodedHeader rest
+  onReq _
     = do
+    (_bulbM, pp, decodedHeader, rest) <- ask
     let
       payloadE
         = runExcept
@@ -98,8 +104,9 @@ instance OnLifx GetService where
 
 
 instance OnLifx GetHostFirmware where
-  onReq _ bulbM pp decodedHeader rest
+  onReq _
     = do
+    (bulbM, pp, decodedHeader, rest) <- ask
     let
       payloadE
         = runExcept
@@ -108,7 +115,7 @@ instance OnLifx GetHostFirmware where
 
     forM payloadE $ \_payload -> do
       FakeBulbFirmware {..}
-        <- atomically
+        <- liftIO $ atomically
             $ fbFirmware
           <$> readTVar bulbM
 
@@ -122,8 +129,9 @@ instance OnLifx GetHostFirmware where
 
 
 instance OnLifx GetWifiFirmware where
-  onReq _ bulbM pp decodedHeader rest
+  onReq _
     = do
+    (bulbM, pp, decodedHeader, rest) <- ask
     let
       payloadE
         = runExcept
@@ -132,7 +140,7 @@ instance OnLifx GetWifiFirmware where
 
     forM payloadE $ \_payload -> do
       FakeBulbWifiFirmware {..}
-        <- atomically
+        <- liftIO $ atomically
             $ fbWifiFirmware
           <$> readTVar bulbM
 
@@ -146,8 +154,9 @@ instance OnLifx GetWifiFirmware where
 
 
 instance OnLifx GetWifiInfo where
-  onReq _ bulbM pp decodedHeader rest
+  onReq _
     = do
+    (bulbM, pp, decodedHeader, rest) <- ask
     let
       payloadE
         = runExcept
@@ -156,7 +165,7 @@ instance OnLifx GetWifiInfo where
 
     forM payloadE $ \_payload -> do
       FakeBulbWifiInfo {..}
-        <- atomically
+        <- liftIO $ atomically
             $ fbWifiInfo
           <$> readTVar bulbM
 
@@ -170,8 +179,9 @@ instance OnLifx GetWifiInfo where
 
 
 instance OnLifx GetLight where
-  onReq _ bulbM pp decodedHeader rest
+  onReq _
     = do
+    (bulbM, pp, decodedHeader, rest) <- ask
     let
       payloadE
         = runExcept
@@ -180,7 +190,7 @@ instance OnLifx GetLight where
 
     forM payloadE $ \_payload -> do
       (FakeBulbState {..}, label)
-        <- atomically
+        <- liftIO $ atomically
             $ (fbState &&& (^. typed @(Label "name")))
           <$> readTVar bulbM
 
@@ -194,32 +204,34 @@ instance OnLifx GetLight where
 
 
 instance OnLifx GetVersion where
-  onReq _ bulbM pp decodedHeader rest
+  onReq _
     = do
-        let
-          payloadE
-            = runExcept
-            $ withExcept MorphedPayloadError
-            $ decodePacket @GetVersion decodedHeader rest
+    (bulbM, pp, decodedHeader, rest) <- ask
+    let
+      payloadE
+        = runExcept
+        $ withExcept MorphedPayloadError
+        $ decodePacket @GetVersion decodedHeader rest
 
-        forM payloadE $ \_payload -> do
-          FakeBulbVersion {..}
-            <- atomically
-                $ fbVersion
-              <$> readTVar bulbM
+    forM payloadE $ \_payload -> do
+      FakeBulbVersion {..}
+        <- liftIO $ atomically
+            $ fbVersion
+          <$> readTVar bulbM
 
-          let
-            packet
-              = pp
-              (Reply $ DeviceReplyType StateVersionReply)
-              (StateVersion def fbvProduct $ HardwareVersion 0)
+      let
+        packet
+          = pp
+          (Reply $ DeviceReplyType StateVersionReply)
+          (StateVersion def fbvProduct $ HardwareVersion 0)
 
-          pure $ YesResponse (stream packet)
+      pure $ YesResponse (stream packet)
 
 
 instance OnLifx GetLocation where
-  onReq _ bulbM pp decodedHeader rest
+  onReq _
     = do
+    (bulbM, pp, decodedHeader, rest) <- ask
     let
       payloadE
         = runExcept
@@ -227,9 +239,9 @@ instance OnLifx GetLocation where
         $ decodePacket @GetLocation decodedHeader rest
 
     forM payloadE $ \_payload -> do
-      t <- getCurrentLifxUTC
+      t <- liftIO $ getCurrentLifxUTC
       FakeBulbLocation {..}
-        <- atomically
+        <- liftIO $ atomically
             $ fbLocation
           <$> readTVar bulbM
 
@@ -243,8 +255,9 @@ instance OnLifx GetLocation where
 
 
 instance OnLifx GetGroup where
-  onReq _ bulbM pp decodedHeader rest
+  onReq _
     = do
+    (bulbM, pp, decodedHeader, rest) <- ask
     let
       payloadE
         = runExcept
@@ -252,9 +265,9 @@ instance OnLifx GetGroup where
         $ decodePacket @GetGroup decodedHeader rest
 
     forM payloadE $ \_payload -> do
-      t <- getCurrentLifxUTC
+      t <- liftIO $ getCurrentLifxUTC
       FakeBulbGroup {..}
-        <- atomically
+        <- liftIO $ atomically
             $ fbGroup
           <$> readTVar bulbM
 
@@ -268,8 +281,9 @@ instance OnLifx GetGroup where
 
 
 instance OnLifx SetLabel where
-  onReq _ bulbM pp decodedHeader rest
+  onReq _
     = do
+    (bulbM, pp, decodedHeader, rest) <- ask
     let
       payloadE
         = runExcept
@@ -277,10 +291,10 @@ instance OnLifx SetLabel where
         $ decodePacket @SetLabel decodedHeader rest
 
     forM payloadE $ \Packet { pPayload } -> do
-      print $ "Told to set label to " <> show pPayload
+      liftIO $ print $ "Told to set label to " <> show pPayload
 
       label
-        <- atomically $ do
+        <- liftIO $ atomically $ do
           modifyTVar'
             bulbM
             (& typed @(Label "name") .~ (selLabel pPayload))
@@ -297,8 +311,9 @@ instance OnLifx SetLabel where
 
 
 instance OnLifx SetColor where
-  onReq _ bulbM pp decodedHeader rest
+  onReq _
     = do
+    (bulbM, pp, decodedHeader, rest) <- ask
     let
       payloadE
         = runExcept
@@ -306,11 +321,11 @@ instance OnLifx SetColor where
         $ decodePacket @SetColor decodedHeader rest
 
     forM payloadE $ \p@(Packet { pPayload = SetColor {..} }) -> do
-      printBanner "Set Color Payload " (pPayload p)
+      liftIO $ printBanner "Set Color Payload " (pPayload p)
 
       -- Should really spion off a thread to handle the duration aspect of chaning color...
       (FakeBulbState {..}, label)
-        <- atomically $ do
+        <- liftIO $ atomically $ do
           modifyTVar'
             bulbM
             (& typed @FakeBulbState . typed @HSBK .~ secColor)
@@ -328,8 +343,9 @@ instance OnLifx SetColor where
 
 
 instance OnLifx SetLightPower where
-  onReq _ bulbM pp decodedHeader rest
+  onReq _
     = do
+    (bulbM, pp, decodedHeader, rest) <- ask
     let
       payloadE
         = runExcept
@@ -340,21 +356,21 @@ instance OnLifx SetLightPower where
 
       -- If there is a previous power thread kill it (TODO maybe use a channel and a persistent thread)
       (powerThreadV, powerThread)
-        <- atomically $ do
+        <- liftIO $ atomically $ do
           pVar <- fbPowerThread <$> readTVar bulbM
           (pVar, ) <$> readTVar pVar
 
-      forM_ powerThread cancel
+      forM_ powerThread $ liftIO . cancel
 
       LightPower lightPowerLevel
-        <- atomically
+        <- liftIO $ atomically
             $ fbsLightPowerLevel
             . fbState
           <$> readTVar bulbM
 
-      start <- POSIX.getPOSIXTime
+      start <- liftIO $ POSIX.getPOSIXTime
 
-      pThread <- async $ do
+      pThread <- liftIO $ async $ do
 
         let
           end
@@ -383,7 +399,7 @@ instance OnLifx SetLightPower where
         -- | Start the loop
         loop
 
-      atomically
+      liftIO $ atomically
         $ modifyTVar' powerThreadV
         (const $ Just pThread)
 
@@ -397,8 +413,9 @@ instance OnLifx SetLightPower where
 
 
 instance OnLifx SetInfrared where
-  onReq _ bulbM pp decodedHeader rest
+  onReq _
     = do
+    (bulbM, pp, decodedHeader, rest) <- ask
     let
       payloadE
         = runExcept
@@ -407,7 +424,7 @@ instance OnLifx SetInfrared where
 
     forM payloadE $ \Packet { pPayload } -> do
       infraredBrightness
-        <- atomically $ do
+        <- liftIO $ atomically $ do
           modifyTVar'
             bulbM
             (& typed @FakeBulbState . typed @Word16le .~ seiBrightness pPayload)
@@ -423,8 +440,9 @@ instance OnLifx SetInfrared where
 
 
 instance OnLifx SetWaveform where
-  onReq _ bulbM pp decodedHeader rest
+  onReq _
     = do
+    (bulbM, pp, decodedHeader, rest) <- ask
     let
       payloadE
         = runExcept
@@ -432,10 +450,10 @@ instance OnLifx SetWaveform where
         $ decodePacket @SetWaveform decodedHeader rest
 
     forM payloadE $ \p@(Packet { pPayload = SetWaveform {..} }) -> do
-      printBanner "Set Waveform Payload " (pPayload p)
+      liftIO $ printBanner "Set Waveform Payload " (pPayload p)
 
       (FakeBulbState {..}, label)
-        <- atomically
+        <- liftIO $ atomically
             $ (fbState &&& (^. typed @(Label "name")))
           <$> readTVar bulbM
 
@@ -445,13 +463,14 @@ instance OnLifx SetWaveform where
           (Reply $ LightReplyType StateLightReply)
           (StateLight fbsColor 0 fbsLightPowerLevel label 0)
 
-      print packet
+      liftIO $ print packet
       pure $ YesResponse (stream packet)
 
 
 instance OnLifx SetWaveformOptional where
-  onReq _ bulbM pp decodedHeader rest
+  onReq _
     = do
+    (bulbM, pp, decodedHeader, rest) <- ask
     let
       payloadE
         = runExcept
@@ -459,10 +478,10 @@ instance OnLifx SetWaveformOptional where
         $ decodePacket @SetWaveformOptional decodedHeader rest
 
     forM payloadE $ \p@(Packet { pPayload = SetWaveformOptional {..} }) -> do
-      printBanner "Set Waveform Optional Payload " (pPayload p)
+      liftIO $ printBanner "Set Waveform Optional Payload " (pPayload p)
 
       (FakeBulbState {..}, label)
-        <- atomically
+        <- liftIO $ atomically
 --              $ (fbState &&& (^. typed @(Label "name")))  -- | Simple arrow
 --                $ ((. field @"fbState") &&& (^. typed @(Label "name")))  -- | Arrowed full lens
             $ (^. (runGetter $ (,) <$> Getter (field @"fbState") <*>  Getter (typed @(Label "name"))))  -- | General lens composition
@@ -474,13 +493,14 @@ instance OnLifx SetWaveformOptional where
           (Reply $ LightReplyType StateLightReply)
           (StateLight fbsColor 0 fbsLightPowerLevel label 0)
 
-      print packet
+      liftIO $ print packet
       pure $ YesResponse (stream packet)
 
 
 instance OnLifx GetUnknown54 where
-  onReq _ _bulbM pp decodedHeader rest
+  onReq _
     = do
+    (_bulbM, pp, decodedHeader, rest) <- ask
     let
       payloadE
         = runExcept
@@ -488,7 +508,7 @@ instance OnLifx GetUnknown54 where
         $ decodePacket @GetUnknown54 decodedHeader rest
 
     forM payloadE $ \_payload -> do
-      t <- getCurrentLifxUTC
+      t <- liftIO $ getCurrentLifxUTC
 
       let
         _packet
@@ -597,37 +617,37 @@ lightReceiveThread nic ss bulbM
 
     case msgT of
       (Request (DeviceMessageType GetServiceMessage)) ->
-        onReq (Proxy :: Proxy GetService) bulbM pp decodedHeader rest
+        flip runReaderT (bulbM, pp, decodedHeader, rest) $ onReq (Proxy :: Proxy GetService)
       (Request (DeviceMessageType GetHostFirmwareMessage)) ->
-        onReq (Proxy :: Proxy GetHostFirmware) bulbM pp decodedHeader rest
+        flip runReaderT (bulbM, pp, decodedHeader, rest) $ onReq (Proxy :: Proxy GetHostFirmware)
       (Request (DeviceMessageType GetWifiFirmwareMessage)) ->
-        onReq (Proxy :: Proxy GetWifiFirmware) bulbM pp decodedHeader rest
+        flip runReaderT (bulbM, pp, decodedHeader, rest) $ onReq (Proxy :: Proxy GetWifiFirmware)
       (Request (DeviceMessageType GetWifiInfoMessage)) ->
-        onReq (Proxy :: Proxy GetWifiInfo) bulbM pp decodedHeader rest
+        flip runReaderT (bulbM, pp, decodedHeader, rest) $ onReq (Proxy :: Proxy GetWifiInfo)
       (Request (LightMessageType GetLightMessage)) ->
-        onReq (Proxy :: Proxy GetLight) bulbM pp decodedHeader rest
+        flip runReaderT (bulbM, pp, decodedHeader, rest) $ onReq (Proxy :: Proxy GetLight)
       (Request (DeviceMessageType GetVersionMessage)) -> do
-        onReq (Proxy :: Proxy GetVersion) bulbM pp decodedHeader rest
+        flip runReaderT (bulbM, pp, decodedHeader, rest) $ onReq (Proxy :: Proxy GetVersion)
       (Request (DeviceMessageType GetLocationMessage)) -> do
-        onReq (Proxy :: Proxy GetLocation) bulbM pp decodedHeader rest
+        flip runReaderT (bulbM, pp, decodedHeader, rest) $ onReq (Proxy :: Proxy GetLocation)
       (Request (DeviceMessageType GetGroupMessage)) -> do
-        onReq (Proxy :: Proxy GetGroup) bulbM pp decodedHeader rest
+        flip runReaderT (bulbM, pp, decodedHeader, rest) $ onReq (Proxy :: Proxy GetGroup)
       (Request (DeviceMessageType SetLabelMessage)) -> do
-        onReq (Proxy :: Proxy SetLabel) bulbM pp decodedHeader rest
+        flip runReaderT (bulbM, pp, decodedHeader, rest) $ onReq (Proxy :: Proxy SetLabel)
       (Request (LightMessageType SetColorMessage)) -> do
-        onReq (Proxy :: Proxy SetColor) bulbM pp decodedHeader rest
+        flip runReaderT (bulbM, pp, decodedHeader, rest) $ onReq (Proxy :: Proxy SetColor)
       (Request (LightMessageType SetLightPowerMessage)) -> do
-        onReq (Proxy :: Proxy SetLightPower) bulbM pp decodedHeader rest
+        flip runReaderT (bulbM, pp, decodedHeader, rest) $ onReq (Proxy :: Proxy SetLightPower)
       (Request (LightMessageType SetInfraredMessage)) -> do
-        onReq (Proxy :: Proxy SetInfrared) bulbM pp decodedHeader rest
+        flip runReaderT (bulbM, pp, decodedHeader, rest) $ onReq (Proxy :: Proxy SetInfrared)
       (Request (LightMessageType SetWaveformMessage)) -> do
-        onReq (Proxy :: Proxy SetWaveform) bulbM pp decodedHeader rest
+        flip runReaderT (bulbM, pp, decodedHeader, rest) $ onReq (Proxy :: Proxy SetWaveform)
       (Request (LightMessageType SetWaveformOptionalMessage)) -> do
-        onReq (Proxy :: Proxy SetWaveformOptional) bulbM pp decodedHeader rest
+        flip runReaderT (bulbM, pp, decodedHeader, rest) $ onReq (Proxy :: Proxy SetWaveformOptional)
       (Request (DeviceMessageType GetUnknown54Message)) -> do
-        onReq (Proxy :: Proxy GetUnknown54) bulbM pp decodedHeader rest
+        flip runReaderT (bulbM, pp, decodedHeader, rest) $ onReq (Proxy :: Proxy GetUnknown54)
       _ -> (Left $ UnknownPacketError "")
-        <$ (print $ "Header: " <> show decodedHeader <> " Rest: " <> show rest)
+        <$ (liftIO $ print $ "Header: " <> show decodedHeader <> " Rest: " <> show rest)
 
 
 
