@@ -1,4 +1,3 @@
-{-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DeriveGeneric #-}
@@ -119,7 +118,6 @@ import            Network.Socket.ByteString
 import            Numeric                       ( showHex )
 import            Text.Printf
 import            System.Environment
---import            Test.QuickCheck               (Arbitrary (..) )
 import qualified  Data.Binary                   as Bin
 import qualified  Data.Binary.Bits              as Bits
 import qualified  Data.Binary.Get               as BinG
@@ -161,7 +159,6 @@ newtype Word64le
   = Word64le { unWord64le :: Word64 }
   deriving newtype (Num, Real, Enum, Integral, Show, Read, Eq, Ord, Bits, NFData)
 
---deriving newtype instance Arbitrary Word64le
 
 instance Binary Word16le where
   put
@@ -383,7 +380,7 @@ instance Binary a => Binary (Packet a) where
     pFrameAddress <- Bin.get
     pProtocolHeader <- Bin.get
     pPayload <- Bin.get
-    pure $ Packet {..}
+    pure Packet {..}
 
 
 newtype Hue
@@ -563,10 +560,11 @@ newtype ByteId16
 instance Binary ByteId16 where
   put
     = Bin.put . unByte16
+
   get
     = do
-    unByte16 <- sequence $ replicate 16 $ BinG.getWord8
-    pure $ ByteId16 {..}
+    unByte16 <- replicateM 16 BinG.getWord8
+    pure ByteId16 {..}
 
 newtype LocationId
   = LocationId { unLocationId :: ByteId16 }
@@ -656,7 +654,7 @@ instance Binary StateLocation where
     stlLocation <- Bin.get
     stlLabel <- Bin.get
     stlUpdatedAt <- Bin.get
-    pure $ StateLocation {..}
+    pure StateLocation {..}
 
 instance WithSize StateLocation where
   size
@@ -667,7 +665,6 @@ instance WithSize GetLocation where
     = const 0
 
 
-
 data GetPower
   = GetPower
   deriving Show
@@ -675,6 +672,7 @@ data GetPower
 instance Binary GetPower where
   put
     = const $ pure ()
+
   get
     = pure GetPower
 
@@ -685,6 +683,7 @@ data GetLightPower
 instance Binary GetLightPower where
   put
     = const $ pure ()
+
   get
     = pure GetLightPower
 
@@ -695,19 +694,17 @@ instance MessageId GetLightPower where
 
 newtype StateLightPower
   = StateLightPower
-  { stlpLevel :: LightPower
-  }
+  { stlpLevel :: LightPower }
   deriving Show
 
 instance Binary StateLightPower where
   put StateLightPower {..}
-    = do
-    Bin.put stlpLevel
+    = Bin.put stlpLevel
 
   get
     = do
     stlpLevel <- Bin.get
-    pure $ StateLightPower {..}
+    pure StateLightPower {..}
 
 instance WithSize StateLightPower where
   size
@@ -734,7 +731,7 @@ instance Binary SetLightPower where
     = do
     selpLevel <- Bin.get
     selpDuration <- Bin.get
-    pure $ SetLightPower {..}
+    pure SetLightPower {..}
 
 instance MessageId SetLightPower where
   type StateReply SetLightPower = StateLightPower
@@ -777,7 +774,7 @@ instance Binary SetWaveform where
     sewCycles <- Bin.get
     sewSkewRatio <- Bin.get
     sewWaveform <- Bin.get
-    pure $ SetWaveform {..}
+    pure SetWaveform {..}
 
 instance MessageId SetWaveform where
   type StateReply SetWaveform = StateLight
@@ -833,7 +830,7 @@ instance Binary SetWaveformOptional where
     sewoSetSaturation <- Bin.get
     sewoSetBrightness <- Bin.get
     sewoSetKelvin <- Bin.get
-    pure $ SetWaveformOptional {..}
+    pure SetWaveformOptional {..}
 
 instance MessageId SetWaveformOptional where
   type StateReply SetWaveformOptional = StateLight
@@ -851,6 +848,7 @@ data GetLight
 instance Binary GetLight where
   put
     = const $ pure ()
+
   get
     = pure GetLight
 
@@ -870,12 +868,14 @@ data StateLight
   deriving Show
 
 newtype LightPower
-  = LightPower { unLightPower :: Word16le }
+  = LightPower
+  { unLightPower :: Word16le }
   deriving (Show, Eq)
 
 instance Binary LightPower where
   put
     = Bin.put . unLightPower
+
   get
     = LightPower <$> Bin.get
 
@@ -895,7 +895,7 @@ instance Binary StateLight where
     stliPower <- Bin.get
     stliLabel <- Bin.get
     stliReserved2 <- Bin.get
-    pure $ StateLight {..}
+    pure StateLight {..}
 
 instance WithSize StateLight where
   size
@@ -913,6 +913,7 @@ data GetInfrared
 instance Binary GetInfrared where
   put
     = const $ pure ()
+
   get
     = pure GetInfrared
 
@@ -927,17 +928,17 @@ instance WithSize GetInfrared where
 
 newtype StateInfrared
   = StateInfrared
-  { stiBrightness :: Word16le
-  }
+  { stiBrightness :: Word16le }
   deriving Show
 
 instance Binary StateInfrared where
   put
     = Bin.put . stiBrightness
+
   get
     = do
     stiBrightness <- Bin.get
-    pure $ StateInfrared {..}
+    pure StateInfrared {..}
 
 instance WithSize StateInfrared where
   size
@@ -951,17 +952,13 @@ newtype SetInfrared
 instance Binary SetInfrared where
   put
     = Bin.put . seiBrightness
+
   get
     = SetInfrared <$> Bin.get
 
 instance WithSize SetInfrared where
   size
     = const 2
-
-
-
-
-
 
 
 data GetLabel
@@ -971,6 +968,7 @@ data GetLabel
 instance Binary GetLabel where
   put
     = const $ pure ()
+
   get
     = pure GetLabel
 
@@ -981,17 +979,17 @@ instance MessageId GetLabel where
 
 newtype StateLabel
   = StateLabel
-  { stlaLabel :: Label "name"
-  }
+  { stlaLabel :: Label "name" }
   deriving Show
 
 instance Binary StateLabel where
   put
     = Bin.put . stlaLabel
+
   get
     = do
     stlaLabel <- Bin.get
-    pure $ StateLabel {..}
+    pure StateLabel {..}
 
 instance WithSize StateLabel where
   size
@@ -1070,7 +1068,7 @@ instance Binary ProductId where
         :: Word32le
         -> Put
       putWord32le = Bin.put
-  get = maybe (fail "not a known product") (pure) =<< (getWord32le <$> Bin.get)
+  get = maybe (fail "not a known product") pure =<< (getWord32le <$> Bin.get)
     where
       getWord32le
         :: Word32le
@@ -1111,15 +1109,18 @@ data StateVersion
   deriving Show
 
 instance Binary StateVersion where
-  put StateVersion {..} = do
+  put StateVersion {..}
+    = do
     Bin.put stvVendor
     Bin.put stvProduct
     Bin.put stvVersion
-  get = do
+
+  get
+    = do
     stvVendor <- Bin.get
     stvProduct <- Bin.get
     stvVersion <- Bin.get
-    pure $ StateVersion {..}
+    pure StateVersion {..}
 
 instance WithSize StateVersion where
   size
@@ -1446,15 +1447,18 @@ data StateGroup
   deriving Show
 
 instance Binary StateGroup where
-  put StateGroup {..} = do
+  put StateGroup {..}
+    = do
     Bin.put stgGroup
     Bin.put stgLabel
     Bin.put stgUpdatedAt
-  get = do
+
+  get
+    = do
     stgGroup <- Bin.get
     stgLabel <- Bin.get
     stgUpdatedAt <- Bin.get
-    pure $ StateGroup {..}
+    pure StateGroup {..}
 
 instance WithSize StateGroup where
   size
@@ -1488,7 +1492,7 @@ instance Binary StatePower where
 
 newtype SetLabel
   = SetLabel
-  { selLabel :: (Label "name") }
+  { selLabel :: Label "name" }
   deriving Show
 
 instance Binary SetLabel where
@@ -1563,7 +1567,7 @@ instance Binary SetColor where
     secReserved <- () <$ BinG.getWord8
     secColor <- Bin.get
     secDuration <- Bin.get
-    pure $ SetColor {..}
+    pure SetColor {..}
 
 instance MessageId SetColor where
   type StateReply SetColor = StateLight
@@ -1932,7 +1936,7 @@ instance Binary HSBK where
     hsbkSaturation <- Bin.get
     hsbkBrightness <- Bin.get
     hsbkKelvin <- Bin.get
-    pure $ HSBK {..}
+    pure HSBK {..}
 
 instance Binary GetService where
   put _
@@ -1978,8 +1982,8 @@ packetFromHeader
   => Header
   -> a
   -> Packet a
-packetFromHeader Header {..} payload
-  = Packet hFrame hFrameAddress hProtocolHeader payload
+packetFromHeader Header {..}
+  = Packet hFrame hFrameAddress hProtocolHeader
 
 
 

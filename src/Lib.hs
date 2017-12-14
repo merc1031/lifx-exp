@@ -1,15 +1,11 @@
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE DataKinds #-}
-{-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE DerivingStrategies #-}
-{-# LANGUAGE EmptyDataDecls #-}
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MagicHash #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
@@ -18,8 +14,6 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE StandaloneDeriving #-}
-{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeFamilyDependencies #-}
 {-# LANGUAGE UndecidableInstances #-}
@@ -146,7 +140,7 @@ listCached
   :: SharedState
   -> IO [Light]
 listCached SharedState {..}
-  = HM.elems <$> (atomically $ readTVar ssDevices)
+  = HM.elems <$> atomically (readTVar ssDevices)
 
 hue
   :: Float
@@ -296,42 +290,41 @@ onStateService
   -> SockAddr
   -> BSL.ByteString
   -> IO ()
-onStateService ss@(SharedState {..}) Packet {..} sa _orig
-  = do
-  forM_ (socketAddrToDeviceSocketAddr sa) $ \sa' -> do
-    let
-      incomingDevice = Device sa' (DeviceId $ unTarget $ faTarget pFrameAddress)
-    moreInfo <- atomically $ do
-      devs <- readTVar ssDevices
-      case dDeviceId incomingDevice `HM.lookup` devs of
-        Just l ->
-          if (lDevice l /= incomingDevice && False)
-          then do
-            --writeTVar ssDevices $ HM.insert (dDeviceId incomingDevice) (Light incomingDevice Nothing Nothing Nothing Nothing Nothing) devs
-            pure $ map (flip uncurry (ss, incomingDevice)) queries
-          else pure []
-        Nothing -> do
-          writeTVar ssDevices
-            $ HM.insert
-                (dDeviceId incomingDevice)
-                (Light
-                  incomingDevice
-                  Nothing
-                  Nothing
-                  Nothing
-                  Nothing
-                  Nothing
-                  Nothing
-                  Nothing
-                  Nothing
-                  Nothing
-                  Nothing
-                  Nothing
-                )
-                devs
-          pure $ map (flip uncurry (ss, incomingDevice)) queries
+onStateService ss@SharedState {..} Packet {..} sa _orig
+  = forM_ (socketAddrToDeviceSocketAddr sa) $ \sa' -> do
+  let
+    incomingDevice = Device sa' (DeviceId $ unTarget $ faTarget pFrameAddress)
+  moreInfo <- atomically $ do
+    devs <- readTVar ssDevices
+    case dDeviceId incomingDevice `HM.lookup` devs of
+      Just l ->
+        if lDevice l /= incomingDevice && False
+        then
+          --writeTVar ssDevices $ HM.insert (dDeviceId incomingDevice) (Light incomingDevice Nothing Nothing Nothing Nothing Nothing) devs
+          pure $ map (`uncurry` (ss, incomingDevice)) queries
+        else pure []
+      Nothing -> do
+        writeTVar ssDevices
+          $ HM.insert
+              (dDeviceId incomingDevice)
+              (Light
+                incomingDevice
+                Nothing
+                Nothing
+                Nothing
+                Nothing
+                Nothing
+                Nothing
+                Nothing
+                Nothing
+                Nothing
+                Nothing
+                Nothing
+              )
+              devs
+        pure $ map (`uncurry` (ss, incomingDevice)) queries
 
-    sequence_ moreInfo
+  sequence_ moreInfo
   where
     StateService {..} = pPayload
     queries = [getLocation, getGroup, getLabel, getLightPower, getLight, getVersion, getHostFirmware, getWifiFirmware]
@@ -343,19 +336,18 @@ updateWifiFirmware
   -> Packet StateWifiFirmware
   -> IO ()
 updateWifiFirmware SharedState {..} Device {..} Packet {..}
-  = do
-  atomically $ do
-    devs <- readTVar ssDevices
-    let
-      newDevs = HM.adjust
-        (\l@(Light {..}) ->
-          l { lWifiFirmwareBuild = Just stwfBuild
-            , lWifiFirmwareVersion = Just stwfVersion
-            }
-        )
-        dDeviceId
-        devs
-    writeTVar ssDevices newDevs
+  = atomically $ do
+  devs <- readTVar ssDevices
+  let
+    newDevs = HM.adjust
+      (\l@Light {..} ->
+        l { lWifiFirmwareBuild = Just stwfBuild
+          , lWifiFirmwareVersion = Just stwfVersion
+          }
+      )
+      dDeviceId
+      devs
+  writeTVar ssDevices newDevs
   where
     StateWifiFirmware {..} = pPayload
 
@@ -365,12 +357,11 @@ getWifiFirmware
   -> Device
   -> IO ()
 getWifiFirmware ss d
-  = do
-  outerGet ss d GetWifiFirmware $ \_ p@(Packet {..}) _ _ -> do
-    let
-      StateWifiFirmware {..} = pPayload
-    ssLogFunction ss LogDebug $ "Got wifi firmware: " <> show p
-    updateWifiFirmware ss d p
+  = outerGet ss d GetWifiFirmware $ \_ p@Packet {..} _ _ -> do
+  let
+    StateWifiFirmware {..} = pPayload
+  ssLogFunction ss LogDebug $ "Got wifi firmware: " <> show p
+  updateWifiFirmware ss d p
 
 updateHostFirmware
   :: SharedState
@@ -378,19 +369,18 @@ updateHostFirmware
   -> Packet StateHostFirmware
   -> IO ()
 updateHostFirmware SharedState {..} Device {..} Packet {..}
-  = do
-  atomically $ do
-    devs <- readTVar ssDevices
-    let
-      newDevs = HM.adjust
-        (\l@(Light {..}) ->
-          l { lHostFirmwareBuild = Just sthfBuild
-            , lHostFirmwareVersion = Just sthfVersion
-            }
-        )
-        dDeviceId
-        devs
-    writeTVar ssDevices newDevs
+  = atomically $ do
+  devs <- readTVar ssDevices
+  let
+    newDevs = HM.adjust
+      (\l@Light {..} ->
+        l { lHostFirmwareBuild = Just sthfBuild
+          , lHostFirmwareVersion = Just sthfVersion
+          }
+      )
+      dDeviceId
+      devs
+  writeTVar ssDevices newDevs
   where
     StateHostFirmware {..} = pPayload
 
@@ -400,12 +390,11 @@ getHostFirmware
   -> Device
   -> IO ()
 getHostFirmware ss d
-  = do
-  outerGet ss d GetHostFirmware $ \_ p@(Packet {..}) _ _ -> do
-    let
-      StateHostFirmware {..} = pPayload
-    ssLogFunction ss LogDebug $ "Got host firmware: " <> show p
-    updateHostFirmware ss d p
+  = outerGet ss d GetHostFirmware $ \_ p@Packet {..} _ _ -> do
+  let
+    StateHostFirmware {..} = pPayload
+  ssLogFunction ss LogDebug $ "Got host firmware: " <> show p
+  updateHostFirmware ss d p
 
 
 updateVersion
@@ -414,19 +403,18 @@ updateVersion
   -> Packet StateVersion
   -> IO ()
 updateVersion SharedState {..} Device {..} Packet {..}
-  = do
-  atomically $ do
-    devs <- readTVar ssDevices
-    let
-      newDevs = HM.adjust
-        (\l@(Light {..}) ->
-          l { lProduct = Just stvProduct
-            , lHardwareVersion = Just stvVersion
-            }
-        )
-        dDeviceId
-        devs
-    writeTVar ssDevices newDevs
+  = atomically $ do
+  devs <- readTVar ssDevices
+  let
+    newDevs = HM.adjust
+      (\l@Light {..} ->
+        l { lProduct = Just stvProduct
+          , lHardwareVersion = Just stvVersion
+          }
+      )
+      dDeviceId
+      devs
+  writeTVar ssDevices newDevs
   where
     StateVersion {..} = pPayload
 
@@ -436,12 +424,11 @@ getVersion
   -> Device
   -> IO ()
 getVersion ss d
-  = do
-  outerGet ss d GetVersion $ \_ p@(Packet {..}) _ _ -> do
-    let
-      StateVersion {..} = pPayload
-    ssLogFunction ss LogDebug $ "Got version: " <> show p
-    updateVersion ss d p
+  = outerGet ss d GetVersion $ \_ p@Packet {..} _ _ -> do
+  let
+    StateVersion {..} = pPayload
+  ssLogFunction ss LogDebug $ "Got version: " <> show p
+  updateVersion ss d p
 
 updateLocation
   :: SharedState
@@ -449,12 +436,11 @@ updateLocation
   -> Packet StateLocation
   -> IO ()
 updateLocation SharedState {..} Device {..} Packet {..}
-  = do
-  atomically $ do
-    devs <- readTVar ssDevices
-    let
-      newDevs = HM.adjust (\l@(Light {..}) -> l { lLocation = Just stlLabel } ) dDeviceId devs
-    writeTVar ssDevices newDevs
+  = atomically $ do
+  devs <- readTVar ssDevices
+  let
+    newDevs = HM.adjust (\l@Light {..} -> l { lLocation = Just stlLabel } ) dDeviceId devs
+  writeTVar ssDevices newDevs
   where
     StateLocation {..} = pPayload
 
@@ -464,12 +450,11 @@ getLocation
   -> Device
   -> IO ()
 getLocation ss d
-  = do
-  outerGet ss d GetLocation $ \_ p@(Packet {..}) _ _ -> do
-    let
-      StateLocation {..} = pPayload
-    ssLogFunction ss LogDebug $ "Got location: " <> show p
-    updateLocation ss d p
+  = outerGet ss d GetLocation $ \_ p@Packet {..} _ _ -> do
+  let
+    StateLocation {..} = pPayload
+  ssLogFunction ss LogDebug $ "Got location: " <> show p
+  updateLocation ss d p
 
 
 updateGroup
@@ -478,12 +463,11 @@ updateGroup
   -> Packet StateGroup
   -> IO ()
 updateGroup SharedState {..} Device {..} Packet {..}
-  = do
-  atomically $ do
-    devs <- readTVar ssDevices
-    let
-      newDevs = HM.adjust (\l@(Light {..}) -> l { lGroup = Just stgLabel } ) dDeviceId devs
-    writeTVar ssDevices newDevs
+  = atomically $ do
+  devs <- readTVar ssDevices
+  let
+    newDevs = HM.adjust (\l@Light {..} -> l { lGroup = Just stgLabel } ) dDeviceId devs
+  writeTVar ssDevices newDevs
   where
     StateGroup {..} = pPayload
 
@@ -492,7 +476,7 @@ getGroup
   -> Device
   -> IO ()
 getGroup ss d
-  = outerGet ss d GetGroup $ \_ p@(Packet {..}) _ _ -> do
+  = outerGet ss d GetGroup $ \_ p@Packet {..} _ _ -> do
   let
     StateGroup {..} = pPayload
   ssLogFunction ss LogDebug $ "Got Group: " <> show p
@@ -504,12 +488,11 @@ updateLabel
   -> Packet StateLabel
   -> IO ()
 updateLabel SharedState {..} Device {..} Packet {..}
-  = do
-  atomically $ do
-    devs <- readTVar ssDevices
-    let
-      newDevs = HM.adjust (\l@(Light {..}) -> l { lLabel = Just stlaLabel } ) dDeviceId devs
-    writeTVar ssDevices newDevs
+  = atomically $ do
+  devs <- readTVar ssDevices
+  let
+    newDevs = HM.adjust (\l@Light {..} -> l { lLabel = Just stlaLabel } ) dDeviceId devs
+  writeTVar ssDevices newDevs
   where
     StateLabel {..} = pPayload
 
@@ -518,7 +501,7 @@ getLabel
   -> Device
   -> IO ()
 getLabel ss d
-  = outerGet ss d GetLabel $ \_ p@(Packet {..}) _ _ -> do
+  = outerGet ss d GetLabel $ \_ p@Packet {..} _ _ -> do
   let
     StateLabel {..} = pPayload
   ssLogFunction ss LogDebug $ "Got Label: " <> show p
@@ -530,12 +513,11 @@ updateLightPower
   -> Packet StateLightPower
   -> IO ()
 updateLightPower SharedState {..} Device {..} Packet {..}
-  = do
-  atomically $ do
-    devs <- readTVar ssDevices
-    let
-      newDevs = HM.adjust (\l@(Light {..}) -> l { lPower = Just stlpLevel } ) dDeviceId devs
-    writeTVar ssDevices newDevs
+  = atomically $ do
+  devs <- readTVar ssDevices
+  let
+    newDevs = HM.adjust (\l@Light {..} -> l { lPower = Just stlpLevel } ) dDeviceId devs
+  writeTVar ssDevices newDevs
   where
     StateLightPower {..} = pPayload
 
@@ -544,7 +526,7 @@ getLightPower
   -> Device
   -> IO ()
 getLightPower ss d
-  = outerGet ss d GetLightPower $ \_ p@(Packet {..}) _ _ -> do
+  = outerGet ss d GetLightPower $ \_ p@Packet {..} _ _ -> do
   let
     StateLightPower {..} = pPayload
   ssLogFunction ss LogDebug $ "Got LightPower: " <> show p
@@ -556,21 +538,20 @@ updateLight
   -> Packet StateLight
   -> IO ()
 updateLight SharedState {..} Device {..} Packet {..}
-  = do
-  atomically $ do
-    devs <- readTVar ssDevices
-    let
-      newDevs = HM.adjust
-         (\l@(Light {..})
-             -> l
-             { lPower = Just stliPower
-             , lColor = Just stliColor
-             , lLabel = Just stliLabel
-             }
-         )
-         dDeviceId
-         devs
-    writeTVar ssDevices newDevs
+  = atomically $ do
+  devs <- readTVar ssDevices
+  let
+    newDevs = HM.adjust
+       (\l@Light {..}
+           -> l
+           { lPower = Just stliPower
+           , lColor = Just stliColor
+           , lLabel = Just stliLabel
+           }
+       )
+       dDeviceId
+       devs
+  writeTVar ssDevices newDevs
   where
     StateLight {..} = pPayload
 
@@ -579,7 +560,7 @@ getLight
   -> Device
   -> IO ()
 getLight ss d
-  = outerGet ss d GetLight $ \_ p@(Packet {..}) _ _ -> do
+  = outerGet ss d GetLight $ \_ p@Packet {..} _ _ -> do
   let
     StateLight {..} = pPayload
   ssLogFunction ss LogDebug $ "Got Light: " <> show p
@@ -606,10 +587,10 @@ newDiscoveryPacket
   :: SharedState
   -> (SharedState -> Packet StateService -> SockAddr -> BSL.ByteString -> IO ())
   -> IO (Packet GetService)
-newDiscoveryPacket ss@(SharedState {..}) runCb
+newDiscoveryPacket ss@SharedState {..} runCb
   = do
   pp <- newPacket ss runCb
-    $ \p@(Packet {..}) ->
+    $ \p@Packet {..} ->
       let
         f = pFrame
         pFrame' = f { fTagged = AllTagged }
@@ -623,7 +604,7 @@ newPacket'
   => SharedState
   -> (SharedState -> Packet (StateReply a) -> SockAddr -> BSL.ByteString -> IO ())
   -> IO (a -> Packet a)
-newPacket' ss@(SharedState {..}) runCb
+newPacket' ss@SharedState {..} runCb
   = newPacket ss runCb id
 
 newPacket
@@ -633,7 +614,7 @@ newPacket
   -> (SharedState -> Packet (StateReply a) -> SockAddr -> BSL.ByteString -> IO ())
   -> (Packet a -> Packet a)
   -> IO (a -> Packet a)
-newPacket ss@(SharedState {..}) runCb modify
+newPacket ss@SharedState {..} runCb modify
   = do
   nextSeq <- ssNextSeq
   setCallbackForSeq ss nextSeq $ CallbackWrap decodePacket runCb
@@ -695,13 +676,12 @@ mkState
   :: IO AppState
 mkState
   = do
-  ssLogLevel <- fromJust . (maybe (Just LogError) toLogLevel) <$> lookupEnv "LOG_LEVEL"
+  ssLogLevel <- fromJust . maybe (Just LogError) toLogLevel <$> lookupEnv "LOG_LEVEL"
 
   let
     ssLogFunction onLevel msg
-      = do
-      when (onLevel >= ssLogLevel) $
-        putStrLn msg
+      = when (onLevel >= ssLogLevel) $
+      putStrLn msg
 
   nSeq <- newTVarIO (Sequence 0)
   ssNextSeq <- pure $ atomically $ do
