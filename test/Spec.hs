@@ -24,21 +24,21 @@
 {-# LANGUAGE ViewPatterns #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 {-# OPTIONS_GHC -fno-warn-unused-imports #-}
-import Lib
 
-import Control.Monad (forM_)
-import Data.Bits
-import Data.Binary
-import Data.Semigroup
-import Data.Proxy
-import GHC.Generics
+import            Control.Monad                   ( forM_ )
+import            Data.Binary
+import            Data.Bits
+import            Data.Proxy
+import            Data.Semigroup
+import            Generic.Random
+import            GHC.Generics
+import            Test.Hspec
+import            Test.QuickCheck
+import qualified  Data.Binary                     as Bin
+import qualified  Data.ByteString.Base16.Lazy     as BSL16
 
-import Generic.Random
-
-import Test.Hspec
-import Test.QuickCheck
-import qualified Data.Binary as Bin
-import qualified Data.ByteString.Base16.Lazy as BSL16
+import            Lib
+import            Home.Lights.LIFX.Types
 
 instance Arbitrary Direction where
   arbitrary

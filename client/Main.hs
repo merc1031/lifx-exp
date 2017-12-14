@@ -7,14 +7,16 @@ module Main where
 
 import            Control.Concurrent
 import            Control.Concurrent.Async
-import            Data.Semigroup ((<>))
+import            Data.Semigroup            ( (<>) )
 import            Data.Void
-import            Lib
 import            Options.Applicative
 import            System.Environment
 import            Text.Pretty.Simple
-import qualified  Data.Binary     as Bin
-import qualified  Data.List       as L
+import qualified  Data.Binary               as Bin
+import qualified  Data.List                 as L
+
+import            Lib
+import            Home.Lights.LIFX.Types
 
 newtype Config
   = Config

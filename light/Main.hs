@@ -35,7 +35,6 @@ import            Data.Default
 import            Data.Semigroup              ( (<>) )
 import            Data.String                 ( IsString (..) )
 import            Data.Word
-import            Lib
 import            Network.Info                ( getNetworkInterfaces )
 import            Network.Socket              ( Socket (..)
                                               , SockAddr (..)
@@ -61,6 +60,9 @@ import qualified  Data.ByteString.Lazy        as  BSL
 import qualified  Data.List                   as  L
 import qualified  Data.Time.Clock.POSIX       as  POSIX
 import qualified  Network.Info                as  NI
+
+import            Lib
+import            Home.Lights.LIFX.Types
 
 lightReceiveThread
   :: NI.NetworkInterface

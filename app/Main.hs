@@ -1,7 +1,9 @@
 module Main where
 
-import Control.Concurrent.Async
-import Lib
+import            Control.Concurrent.Async
+
+import            Lib
+import            Home.Lights.LIFX.Types
 
 main
   :: IO ()
