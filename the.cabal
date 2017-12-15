@@ -68,6 +68,9 @@ executable the-exe
                      , generic-lens
                      , microlens-platform
                      , lens
+                     , haskeline
+                     , mtl
+                     , transformers
   default-language:    Haskell2010
 
 executable the-client
