@@ -100,23 +100,23 @@ directionToSomePayload
     deviceMessagetoSomePayload
       = \case
       GetServiceMessage -> Right $ SomePayload $ Proxy @GetService
-      GetHostFirmwareMessage -> Right $ SomePayload $ Proxy @GetService
-      GetWifiFirmwareMessage -> Right $ SomePayload $ Proxy @GetService
-      GetWifiInfoMessage -> Right $ SomePayload $ Proxy @GetService
-      GetVersionMessage -> Right $ SomePayload $ Proxy @GetService
-      GetLocationMessage -> Right $ SomePayload $ Proxy @GetService
-      GetGroupMessage -> Right $ SomePayload $ Proxy @GetService
-      GetLabelMessage -> Right $ SomePayload $ Proxy @GetService
-      GetUnknown54Message -> Right $ SomePayload $ Proxy @GetService
+      GetHostFirmwareMessage -> Right $ SomePayload $ Proxy @GetHostFirmware
+      GetWifiFirmwareMessage -> Right $ SomePayload $ Proxy @GetWifiFirmware
+      GetWifiInfoMessage -> Right $ SomePayload $ Proxy @GetWifiInfo
+      GetVersionMessage -> Right $ SomePayload $ Proxy @GetVersion
+      GetLocationMessage -> Right $ SomePayload $ Proxy @GetLocation
+      GetGroupMessage -> Right $ SomePayload $ Proxy @GetGroup
+      SetLabelMessage -> Right $ SomePayload $ Proxy @SetLabel
+      GetUnknown54Message -> Right $ SomePayload $ Proxy @GetUnknown54
       m -> Left $ "No reply for packet type" <> show m
     lightMessagetoSomePayload
       = \case
-      GetLightMessage -> Right $ SomePayload $ Proxy @GetService
-      SetColorMessage -> Right $ SomePayload $ Proxy @GetService
-      SetLightPowerMessage -> Right $ SomePayload $ Proxy @GetService
-      SetInfraredMessage -> Right $ SomePayload $ Proxy @GetService
-      SetWaveformMessage -> Right $ SomePayload $ Proxy @GetService
-      SetWaveformOptionalMessage -> Right $ SomePayload $ Proxy @GetService
+      GetLightMessage -> Right $ SomePayload $ Proxy @GetLight
+      SetColorMessage -> Right $ SomePayload $ Proxy @SetColor
+      SetLightPowerMessage -> Right $ SomePayload $ Proxy @SetLightPower
+      SetInfraredMessage -> Right $ SomePayload $ Proxy @SetInfrared
+      SetWaveformMessage -> Right $ SomePayload $ Proxy @SetWaveform
+      SetWaveformOptionalMessage -> Right $ SomePayload $ Proxy @SetWaveformOptional
       m -> Left $ "No reply for packet type" <> show m
 
 
@@ -138,7 +138,6 @@ instance OnLifx GetService where
           (Reply $ DeviceReplyType StateServiceReply)
           (StateService 1 56700)
 
-      liftIO $ print $ "GetService: " <> show decodedHeader <> " " <> show packet
       pure $ YesResponse (stream packet)
 
 
@@ -330,7 +329,6 @@ instance OnLifx SetLabel where
         $ decodePacket @SetLabel decodedHeader rest
 
     forM payloadE $ \Packet { pPayload } -> do
-      liftIO $ print $ "Told to set label to " <> show pPayload
 
       label
         <- liftIO $ atomically $ do
@@ -502,7 +500,6 @@ instance OnLifx SetWaveform where
           (Reply $ LightReplyType StateLightReply)
           (StateLight fbsColor 0 fbsLightPowerLevel label 0)
 
-      liftIO $ print packet
       pure $ YesResponse (stream packet)
 
 
@@ -532,7 +529,6 @@ instance OnLifx SetWaveformOptional where
           (Reply $ LightReplyType StateLightReply)
           (StateLight fbsColor 0 fbsLightPowerLevel label 0)
 
-      liftIO $ print packet
       pure $ YesResponse (stream packet)
 
 
@@ -662,15 +658,12 @@ lightReceiveThread nic ss bulbM
        <$ (liftIO $ print $ "Header: " <> show decodedHeader <> " Rest: " <> show rest <> " Message: " <> err)
 
 
-  print encoded
-
   -- | Unwrap Maybe
   forM_ encoded $ \enc ->
     -- | Unwrape Morphed Error
     forM_ enc $ \case
       NoResponse -> pure ()
       YesResponse msg -> do
-        print $ "Sending response" <> show msg
         sendManyTo ss msg sa
         incrTx msg
 
@@ -900,7 +893,7 @@ instance Default FakeBulbLocation where
   def
     = FakeBulbLocation
     -- | Got from dump from real lights
-    { fblLocationId = LocationId $ ByteId16 [91,85,176,70,10,79,235,23,234,91,5,109,79,82,97,227]
+    { fblLocationId = LocationId $ ByteId16 [191,85,176,70,10,79,235,23,234,91,5,109,79,82,97,227]
     , fblLabel = Label "Home"
     }
 
@@ -917,7 +910,7 @@ instance Default FakeBulbGroup where
   def
     = FakeBulbGroup
     -- | Got from dump from real lights
-    { fbgGroupId = GroupId $ ByteId16 [7,223,129,99,224,228,225,11,76,216,163,23,127,156,239,247]
+    { fbgGroupId = GroupId $ ByteId16 [47,223,129,99,224,228,225,11,76,216,163,23,127,156,239,247]
     , fbgLabel = Label "Lab"
     }
 

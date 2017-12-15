@@ -2551,7 +2551,7 @@ word16leToMessageType 116
   = Right $ LightMessageType GetLightPowerMessage
 word16leToMessageType 117
   = Right $ LightMessageType SetLightPowerMessage
-word16leToMessageType 121
+word16leToMessageType 120
   = Right $ LightMessageType GetInfraredMessage
 word16leToMessageType 122
   = Right $ LightMessageType SetInfraredMessage
