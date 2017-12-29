@@ -12,6 +12,7 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeFamilyDependencies #-}
 {-# LANGUAGE UndecidableInstances #-}
@@ -193,6 +194,7 @@ mkPacket tag src tar ack res sequ typ pay
     f = mkFrame p tag src
     fa = mkFrameAddress tar ack res sequ
     ph = mkProtocolHeader typ
+    -- Only make a refernce to `p` here to "tie the knot" since mkFrame needs the `p` size
     p = Packet f fa ph pay
   in
     p
@@ -214,7 +216,7 @@ newDiscoveryPacket
   :: SharedState
   -> (SharedState -> Packet StateService -> SockAddr -> BSL.ByteString -> IO ())
   -> IO (Packet GetService)
-newDiscoveryPacket ss@SharedState {..} runCb
+newDiscoveryPacket ss runCb
   = do
   pp <- newPacket ss runCb
     $ \p@Packet {..} ->
@@ -232,8 +234,8 @@ newPacket'
   => SharedState
   -> (SharedState -> Packet (StateReply a) -> SockAddr -> BSL.ByteString -> IO ())
   -> IO (a -> Packet a)
-newPacket' ss@SharedState {..} runCb
-  = newPacket ss runCb id
+newPacket'
+  = _3 newPacket id
 
 
 newPacket
@@ -254,4 +256,14 @@ newPacket ss@SharedState {..} runCb modify
     NoAckRequired
     NoResRequired
     nextSeq
-    (msgTypP (Proxy :: Proxy a))
+    (msgTypP (Proxy @a))
+
+-- | Utilities
+
+_3
+  :: (a -> b -> c -> d)
+  -> c
+  -> a
+  -> b
+  -> d
+_3 f c a b = f a b c
